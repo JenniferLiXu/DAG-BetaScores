@@ -1,3 +1,10 @@
+#binary data
+#scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia)
+#BiDAG:::DAGcorescore(2, c(3,5), n = 8, param = scoreParam)
+#continuous data
+scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston)
+BiDAG:::DAGcorescore(2, c(3,5), n = 14, param = scoreParam)
+
 #This function calculate beta for each possible parent node (e.g., node 2) 
 #in relation to the child node (e.g., node 1) as follows
 
@@ -9,7 +16,6 @@
 #represents the beta score of parent node i on child node j in the k-th sampled DAG.
 calculateBetaScoresArray <- function(sampledDAGs, n) {
   # The array dimensions are [number of parents, number of children, number of sampled DAGs]
-  n <- 4
   k <- 1
   
   allBetaScores <- array(NA, dim = c(n, n, k))
@@ -25,7 +31,7 @@ calculateBetaScoresArray <- function(sampledDAGs, n) {
       parentNodes <- which(incidence[, childNode] == 1)
       
       # Calculate the score for the child with all its current parents
-      scoreWithAllParents <- DAGcorescore(childNode, parentnodes = parentNodes,n)
+      scoreWithAllParents <- BiDAG:::DAGcorescore(childNode, parentnodes = parentNodes,n, scoreParam)
 
       for (parentNode in 1:n) {
         #parentNode <- 1
@@ -34,15 +40,15 @@ calculateBetaScoresArray <- function(sampledDAGs, n) {
           if (parentNode %in% parentNodes) {
             # Remove parentNode and calculate the score
             WithoutparentNodes <- parentNodes[!parentNodes == parentNode]
-            scoreWithoutParent <- DAGcorescore(childNode, parentnodes = WithoutparentNodes, n)
+            scoreWithoutParent <- BiDAG:::DAGcorescore(childNode, parentnodes = WithoutparentNodes, n, scoreParam)
             
             # Calculate beta score
             allBetaScores[parentNode, childNode, dagIndex] <- scoreWithAllParents - scoreWithoutParent
             
           } else {
             WithparentNodes <-c(parentNode, parentNodes)
-            scoreWithParentNode <- DAGcorescore(childNode, parentnodes = WithparentNodes, n)
-            #scoreWithParentNode <- DAGcorescore(childNode, parentnodes = WithparentNodes, n, param$type == "usr")
+            scoreWithParentNode <- BiDAG:::DAGcorescore(childNode, parentnodes = WithparentNodes, n, scoreParam)
+    
             
             # Calculate the beta score
             allBetaScores[parentNode, childNode, dagIndex] <- scoreWithParentNode - scoreWithAllParents
