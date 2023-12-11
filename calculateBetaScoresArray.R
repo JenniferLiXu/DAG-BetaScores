@@ -16,14 +16,12 @@ BiDAG:::DAGcorescore(2, c(3,5), n = 14, param = scoreParam)
 #represents the beta score of parent node i on child node j in the k-th sampled DAG.
 calculateBetaScoresArray <- function(sampledDAGs, n) {
   # The array dimensions are [number of parents, number of children, number of sampled DAGs]
-  k <- 1
+  k <- length(sampledDAGs)
   
   allBetaScores <- array(NA, dim = c(n, n, k))
   
   for (dagIndex in seq_along(sampledDAGs)) {
-    dagIndex <- 1
-    #incidence <- sampledDAGs[[dagIndex]]
-    incidence <- adjMatrix
+    incidence <- sampledDAGs[[dagIndex]]
     
     for (childNode in 1:n) {
       #childNode <- 3
