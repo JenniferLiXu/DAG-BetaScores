@@ -3,7 +3,7 @@
 orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
   currentpermy<-startorder #starting order represented as a permutation
   currentorderscores<-orderscore_betas(n,c(1:n), betas, currentpermy) #starting score
-  currenttotallogscore<-sum(currentorderscores$totscores) #log total score of all DAGs in the starting order
+  currenttotallogscore<-sum(currentorderscores) #log total score of all DAGs in the starting order
   
   currentDAG<-samplescore(n,betas,currentpermy) #score of a single DAG sampled from the starting order
   
@@ -46,15 +46,15 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         rescorenodes<-proposedpermy[min(sampledelements):max(sampledelements)] #we only need to rescore these nodes between the swapped elements to speed up the calculation
         
         proposedorderrescored<-orderscore_betas(n,rescorenodes, betas, proposedpermy)#their scores
-        proposedtotallogscore<-currenttotallogscore-sum(currentorderscores$totscores[rescorenodes])+sum(proposedorderrescored$totscores[rescorenodes]) #and the new log total score by updating only the necessary nodes
+        proposedtotallogscore<-currenttotallogscore-sum(currentorderscores[rescorenodes])+sum(proposedorderrescored[rescorenodes]) #and the new log total score by updating only the necessary nodes
         
         scoreratio<-exp(proposedtotallogscore-currenttotallogscore) #acceptance probability
         
         if(runif(1)<scoreratio){ #Move accepted then set the current order and scores to the proposal
           currentpermy<-proposedpermy
-          currentorderscores$allowedrows[rescorenodes]<-proposedorderrescored$allowedrows[rescorenodes]
+          #currentorderscores$allowedrows[rescorenodes]<-proposedorderrescored$allowedrows[rescorenodes]
           #currentorderscores$allscores[rescorenodes]<-proposedorderrescored$allscores[rescorenodes]
-          currentorderscores$totscores[rescorenodes]<-proposedorderrescored$totscores[rescorenodes]
+          currentorderscores[rescorenodes]<-proposedorderrescored[rescorenodes]
           currenttotallogscore<-proposedtotallogscore
         }
       }

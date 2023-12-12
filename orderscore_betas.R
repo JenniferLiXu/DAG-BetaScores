@@ -36,8 +36,7 @@ orderscore_betas <- function(n,scorenodes, betas ,permy) {
   }
   
   
-  scores<-list()
-  scores$totscores<-nodescores
+  scores <- nodescores
   #scores$orderscores<-sum(nodescores)
   return(scores)
   

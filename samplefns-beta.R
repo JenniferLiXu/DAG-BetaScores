@@ -14,7 +14,7 @@ samplescore<-function(n,betas,permy){
   
   for (i in 1:n){
     if(positions[i]==n){ # no parents are allowed
-      incidence[, i]  <- 0
+      
     } else {
       #Nodes that are allowed to be its parents
       parentnodes <- permy[c((positions[i]+1):n)]

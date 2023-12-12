@@ -1,10 +1,3 @@
-#binary data
-#scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia)
-#BiDAG:::DAGcorescore(2, c(3,5), n = 8, param = scoreParam)
-#continuous data
-scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston)
-BiDAG:::DAGcorescore(2, c(3,5), n = 14, param = scoreParam)
-
 #This function calculate beta for each possible parent node (e.g., node 2) 
 #in relation to the child node (e.g., node 1) as follows
 
@@ -14,10 +7,9 @@ BiDAG:::DAGcorescore(2, c(3,5), n = 14, param = scoreParam)
 
 #This function will return a 3D array where allBetaScores[i, j, k] 
 #represents the beta score of parent node i on child node j in the k-th sampled DAG.
-calculateBetaScoresArray <- function(sampledDAGs, n) {
+
+calculateBetaScoresArray <- function(sampledDAGs, k, n) {
   # The array dimensions are [number of parents, number of children, number of sampled DAGs]
-  k <- length(sampledDAGs)
-  
   allBetaScores <- array(NA, dim = c(n, n, k))
   
   for (dagIndex in seq_along(sampledDAGs)) {
@@ -69,3 +61,7 @@ calculateBetaScoresArray <- function(sampledDAGs, n) {
   
   return(allBetaScores)
 }
+
+
+
+
