@@ -47,19 +47,6 @@ pcFit <- pc(suffStat = list(C = cor(data), n = nrow(data)),
 adjMatrix <- as(pcFit, "amat")
 
 
-n <- 14
-# Create a zero-matrix as our starting betas
-beta_matrix <- matrix(c(0), 
-                      nrow = 14, ncol = 14, byrow = TRUE)
-
-# Replace diagonal elements with NA
-diag(beta_matrix) <- NA
-
-# Convert the matrix to an array
-betas <- array(beta_matrix, dim = c(14, 14))
-
-# Define the starting order
-permy <- c(1:14)
 
 #DAG <-samplescore(n,betas,permy)
 #calculateBetaScoresArray(sampledDAGs = DAG, n)
@@ -67,13 +54,19 @@ permy <- c(1:14)
 
 #Importance Sampling
 importance_beta <- function(target_beta, beta_values){
-  # Initialize the matrix for averaged beta values 
-  averaged_beta_matrix <- matrix(0, n, n)  
-  # Replace diagonal elements with NA
-  diag(averaged_beta_matrix) <- NA
-  weights <- numeric()
-  values <-  numeric()
+  if (is.null(dim(target_beta)) || is.null(dim(beta_values))) {
+    stop("target_beta and beta_values must be matrices or arrays.")
+  }
   
+  n <- dim(target_beta)[1]
+  
+  # Initialize the matrix for averaged beta values 
+  averaged_beta_matrix <- matrix(NA, n, n)  
+  ess <- matrix(NA, n, n)  
+  
+  total_ess <- 0
+  total_entries <- 0
+
   # Iterate over each matrix position
   for (row in 1:n) {
     for (col in 1:n) {
@@ -81,12 +74,20 @@ importance_beta <- function(target_beta, beta_values){
         values <- beta_values[row, col, ]  # Extract values from the same position in all matrices
         weights <- (target_beta[row, col, 1])/values  # Define or compute weights for these values
         
+        normalized_weights <- weights / sum(weights) # Normalized weights
+        
+        ess_value <- 1 / sum(normalized_weights^2)
+        ess_matrix[row, col] <- ess_value
+        total_ess <- total_ess + ess_value
+        total_entries <- total_entries + 1
+        
         # Compute the weighted average and assign it to the averaged matrix
-        averaged_beta_matrix[row, col] <- sum(values * weights / sum(weights))
+        averaged_beta_matrix[row, col] <- sum(values * normalized_weights)
       }
     }
   }
-  return(averaged_beta_matrix)
+  average_ess <- total_ess / total_entries
+  return(list(averaged_beta_matrix = averaged_beta_matrix, ess_matrix = ess_matrix, average_ess = average_ess))
 }
 
 
@@ -149,6 +150,20 @@ is_with_get_weight <- function(beta_values, DAG_Test){
   return(averaged_beta_matrix)
 }
 
+# Initialize
+n <- 14
+# Create a zero-matrix as our starting betas
+beta_matrix <- matrix(c(0), nrow = 14, ncol = 14, byrow = TRUE)
+# Replace diagonal elements with NA
+diag(beta_matrix) <- NA
+
+# Convert the matrix to an array
+betas <- array(beta_matrix, dim = c(14, 14))
+
+# Define the starting order
+permy <- c(1:14)
+
+# Calculate move probabilities
 prob1<-99
 if(n>3){ prob1<-round(6*99*n/(n^2+10*n-24)) }
 prob1<-prob1/100
@@ -156,28 +171,33 @@ moveprobs<-c(prob1,0.99-prob1,0.01)
 moveprobs<-moveprobs/sum(moveprobs) # normalisation
 
 # Number of iterations
-iter <- 1
+iter <- 10
 
-weighted_betas <- list()
+weighted_betas <- list(betas)
+averaged_ess <- numeric(iter)
 
-for (round in 1:iter) {
-  example <- orderMCMC_betas(n,startorder = permy,iterations = 10, betas,stepsave = 1, moveprobs)
+for (i in 1:iter) {
+  example <- orderMCMC_betas(n,startorder = permy,iterations = 10, 
+                             betas = weighted_betas[[i]],
+                             stepsave = 1, moveprobs)
   DAGs <- example[[1]]
   
   # beta_values is a list of matrices from calculateBetaScoresArray
   beta_values <- calculateBetaScoresArray(DAGs, k = length(DAGs) ,n)
   
-  # use Importance Sampling to update values of betas
-  betas <- importance_beta(target_beta, beta_values)
-  
-  # store the weighted beta values
-  weighted_betas[[round]] <- betas
+  # Update beta values using importance sampling
+  is_results <- importance_beta(target_beta, beta_values)
+  weighted_betas[[i + 1]] <- is_results$averaged_beta_matrix
+  averaged_ess[i] <- is_results$average_ess
   
   #weighted_betas[[2]] <- is_with_get_weight(beta_values, DAG_Test)
+  
+  # Update the order for the next iteration
+  permy <- unlist(example[[4]][length(example[[4]])])
 }
 
 
-
+print(averaged_ess)
 
 
 
