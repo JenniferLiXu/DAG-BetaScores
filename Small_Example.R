@@ -62,7 +62,7 @@ importance_beta <- function(target_beta, beta_values){
   
   # Initialize the matrix for averaged beta values 
   averaged_beta_matrix <- matrix(NA, n, n)  
-  ess <- matrix(NA, n, n)  
+  ess_matrix <- matrix(NA, n, n)  
   
   total_ess <- 0
   total_entries <- 0
@@ -187,6 +187,7 @@ for (i in 1:iter) {
   
   # Update beta values using importance sampling
   is_results <- importance_beta(target_beta, beta_values)
+  
   weighted_betas[[i + 1]] <- is_results$averaged_beta_matrix
   averaged_ess[i] <- is_results$average_ess
   

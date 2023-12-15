@@ -19,6 +19,7 @@ orderscore_betas <- function(n,scorenodes, betas ,permy) {
   positions <- order(permy) 
   
   for (i in scorenodes){
+    i = 2
     if(positions[i]==n){ # no parents are allowed
       nodescores[i]<- 1 # there is only one score
     } else {
