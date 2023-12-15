@@ -97,6 +97,7 @@ importance_beta <- function(target_beta, beta_values){
 #scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia)
 #BiDAG:::DAGcorescore(2, c(3,5), n = 8, param = scoreParam)
 
+n <- 14 
 # For continuous data
 scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston)
 #BiDAG:::DAGcorescore(2, c(3,5), n = 14, param = scoreParam)
@@ -151,7 +152,7 @@ is_with_get_weight <- function(beta_values, DAG_Test){
 }
 
 # Initialize
-n <- 14
+
 # Create a zero-matrix as our starting betas
 beta_matrix <- matrix(c(0), nrow = 14, ncol = 14, byrow = TRUE)
 # Replace diagonal elements with NA

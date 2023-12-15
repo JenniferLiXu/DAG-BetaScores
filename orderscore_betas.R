@@ -19,7 +19,6 @@ orderscore_betas <- function(n,scorenodes, betas ,permy) {
   positions <- order(permy) 
   
   for (i in scorenodes){
-    i = 2
     if(positions[i]==n){ # no parents are allowed
       nodescores[i]<- 1 # there is only one score
     } else {
@@ -28,7 +27,19 @@ orderscore_betas <- function(n,scorenodes, betas ,permy) {
         parentnodes<-permy[c((positions[i]+1):n)]
 
         # For each node i, calculate the scores
-        nodescores[i] <- sum(log(1 + exp(betas[i, parentnodes])))
+        #nodescores[i] <- sum(log(1 + exp(betas[i, parentnodes])))
+        node_scores <- numeric(length(parentnodes))  # Initialize node scores
+        for (j in 1:length(parentnodes)) {
+          a <- 0  # This is the '0' in your 'log(1 + exp(...))' expression
+          b <- betas[i, parentnodes[j]]
+          
+          c <- max(a, b)
+          d <- min(a, b)
+          
+          # Numerically stable computation
+          node_scores[j] <- c + log1p(exp(d - c))
+        }
+        nodescores[i] <- sum(node_scores)
         
       } else{ # all parents are allowed
         nodescores[i] <- sum(log(1 + exp(betas[i, -i])))

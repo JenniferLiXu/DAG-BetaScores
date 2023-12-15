@@ -1,8 +1,8 @@
 #orderMCMC using orderscore_betas function
 
-startorder <- permy
-iterations <- 10
-betas <- weighted_betas[[i]]
+#startorder <- permy
+#iterations <- 10
+#betas <- weighted_betas[[i]]
 
 orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
   currentpermy<-startorder #starting order represented as a permutation
@@ -52,10 +52,10 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         proposedorderrescored<-orderscore_betas(n,rescorenodes, betas, proposedpermy)#their scores
         proposedtotallogscore<-currenttotallogscore-sum(currentorderscores[rescorenodes])+sum(proposedorderrescored[rescorenodes]) #and the new log total score by updating only the necessary nodes
         
-        cat("proposedtotallogscore:", proposedtotallogscore, "\n")
-        cat("currenttotallogscore:", currenttotallogscore, "\n")
+        #cat("proposedtotallogscore:", proposedtotallogscore, "\n")
+        #cat("currenttotallogscore:", currenttotallogscore, "\n")
         scoreratio<-exp(proposedtotallogscore-currenttotallogscore) #acceptance probability
-        print(scoreratio)
+        #print(scoreratio)
         if(runif(1)<scoreratio){ #Move accepted then set the current order and scores to the proposal
           currentpermy<-proposedpermy
           #currentorderscores$allowedrows[rescorenodes]<-proposedorderrescored$allowedrows[rescorenodes]
