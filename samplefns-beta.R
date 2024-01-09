@@ -12,16 +12,16 @@ samplescore<-function(n,betas,permy){
   #Store the position of each element in the permutation (i.e. an inverse permutation)
   positions <- order(permy) 
   
-  for (i in 1:n){
-    if(positions[i]==n){ # no parents are allowed
+  for (child in 1:n){
+    if(positions[child]==n){ # no parents are allowed
       
     } else {
       #Nodes that are allowed to be its parents
-      parentnodes <- permy[c((positions[i]+1):n)]
+      parentnodes <- permy[c((positions[child]+1):n)]
       
-      for (j in parentnodes){
-        incidence[j, i] <- sample(c(0,1), 1, prob = c(1,exp(betas[j, i])))
-        sampledscore <- sampledscore + betas[j, i]*incidence[j, i]                      
+      for (parent in parentnodes){
+        incidence[parent, child] <- sample(c(0,1), 1, prob = c(1,exp(betas[parent, child])))
+        sampledscore <- sampledscore + betas[parent, child]*incidence[parent, child]                      
       }
       
     }

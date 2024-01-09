@@ -29,20 +29,20 @@ orderscore_betas <- function(n,scorenodes, betas ,permy) {
         # For each node i, calculate the scores
         #nodescores[i] <- sum(log(1 + exp(betas[i, parentnodes])))
         node_scores <- numeric(length(parentnodes))  # Initialize node scores
+        
         for (j in 1:length(parentnodes)) {
-          a <- 0  # This is the '0' in your 'log(1 + exp(...))' expression
+          # Want : z = log (exp a + exp b)
+          a <- 0  # This is the '0' in the 'log(1 + exp(...))' expression
           b <- betas[i, parentnodes[j]]
-          
+          # For numerically stable computation: z = c + log(1 + exp (d-c))
           c <- max(a, b)
           d <- min(a, b)
-          
-          # Numerically stable computation
           node_scores[j] <- c + log1p(exp(d - c))
         }
         nodescores[i] <- sum(node_scores)
         
       } else{ # all parents are allowed
-        nodescores[i] <- sum(log(1 + exp(betas[i, -i])))
+        nodescores[i] <- sum(log(1 + exp(betas[-i, i])))
       }
     }
   }

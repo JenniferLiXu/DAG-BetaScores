@@ -55,7 +55,9 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         #cat("proposedtotallogscore:", proposedtotallogscore, "\n")
         #cat("currenttotallogscore:", currenttotallogscore, "\n")
         scoreratio<-exp(proposedtotallogscore-currenttotallogscore) #acceptance probability
-        #print(scoreratio)
+      
+        #cat("scoreratio:", currenttotallogscore, "\n")
+        
         if(runif(1)<scoreratio){ #Move accepted then set the current order and scores to the proposal
           currentpermy<-proposedpermy
           #currentorderscores$allowedrows[rescorenodes]<-proposedorderrescored$allowedrows[rescorenodes]
