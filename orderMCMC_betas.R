@@ -1,15 +1,18 @@
 #orderMCMC using orderscore_betas function
 
-#startorder <- permy
-#iterations <- 10
+# startorder <- permy
+# iterations <- 10
 #betas <- weighted_betas[[i]]
+# iterations = 100
+# stepsave = 10
 
 orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
   currentpermy<-startorder #starting order represented as a permutation
   currentorderscores<-orderscore_betas(n,c(1:n), betas, currentpermy) #starting score
+  # cat("currentorderscores:", currentorderscores, "\n")
   currenttotallogscore<-sum(currentorderscores) #log total score of all DAGs in the starting order
   
-  currentDAG<-samplescore(n,betas,currentpermy) #score of a single DAG sampled from the starting order
+  currentDAG<-samplescore(n,betas,currentpermy, base_score) #score of a single DAG sampled from the starting order
   
   L1 <- list() # stores the adjacency matrix of a DAG sampled from the orders
   L2 <- list() # stores its log BGe score
@@ -28,6 +31,8 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
   L4[[1]]<-currentpermy #starting order
   
   for (z in 2:zlimit){ #the MCMC chain loop with 'iteration' steps is in two parts
+    count_accept <- 0
+    acceptance_prob <- numeric()
     for (count in 1:stepsave){ #since we only save the results to the lists each 'stepsave'
       
       chosenmove<-sample.int(3,1,prob=moveprobs)
@@ -48,31 +53,39 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         proposedpermy[sampledelements]<-currentpermy[rev(sampledelements)] #proposed new order
         
         rescorenodes<-proposedpermy[min(sampledelements):max(sampledelements)] #we only need to rescore these nodes between the swapped elements to speed up the calculation
-        
+        #cat("currentpermy:", currentpermy, "\n")
+        #cat("proposedpermy:", proposedpermy, "\n")
+        ####
         proposedorderrescored<-orderscore_betas(n,rescorenodes, betas, proposedpermy)#their scores
+        ####
+        
+        #cat("sum(currentorderscores[rescorenodes]):", sum(currentorderscores[rescorenodes]), "\n")
+        #cat("sum(proposedorderrescored[rescorenodes]):", sum(proposedorderrescored[rescorenodes]), "\n")
+        
         proposedtotallogscore<-currenttotallogscore-sum(currentorderscores[rescorenodes])+sum(proposedorderrescored[rescorenodes]) #and the new log total score by updating only the necessary nodes
+        
+        scoreratio<-exp(proposedtotallogscore-currenttotallogscore) #acceptance probability
         
         #cat("proposedtotallogscore:", proposedtotallogscore, "\n")
         #cat("currenttotallogscore:", currenttotallogscore, "\n")
-        scoreratio<-exp(proposedtotallogscore-currenttotallogscore) #acceptance probability
-      
-        #cat("scoreratio:", currenttotallogscore, "\n")
+        #cat("scoreratio:", scoreratio, "\n")
         
-        if(runif(1)<scoreratio){ #Move accepted then set the current order and scores to the proposal
+        if(runif(1) <scoreratio){ #Move accepted then set the current order and scores to the proposal
           currentpermy<-proposedpermy
-          #currentorderscores$allowedrows[rescorenodes]<-proposedorderrescored$allowedrows[rescorenodes]
-          #currentorderscores$allscores[rescorenodes]<-proposedorderrescored$allscores[rescorenodes]
           currentorderscores[rescorenodes]<-proposedorderrescored[rescorenodes]
           currenttotallogscore<-proposedtotallogscore
+          count_accept <- count_accept + 1
         }
+        acceptance_prob <-  c(acceptance_prob, count_accept / stepsave)
       }
     }
-    currentDAG<-samplescore(n,betas,currentpermy)
+    currentDAG<-samplescore(n,betas,currentpermy, base_score)
     L1[[z]]<-currentDAG$incidence #store adjacency matrix of a sampled DAG each 'stepsave'
     L2[[z]]<-currentDAG$logscore #and log score of a sampled DAG
     L3[[z]]<-currenttotallogscore #and the current order score
     L4[[z]]<-currentpermy #and store current order
   }
+  cat("acceptance_prob:", acceptance_prob, "\n")
   return(list(L1,L2,L3,L4))
 }
 

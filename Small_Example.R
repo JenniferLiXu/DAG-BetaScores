@@ -46,87 +46,112 @@ adjMatrix <- as(pcFit, "amat")
 
 #Score of a DAG with given beta matrix
 DAGscore_under_betas <- function(incidence, betas){
+  diag(betas) <- 0
   sampledscore<-0
   for (child in 1:n){
-      for (parent in parentnodes){
-        sampledscore <- sampledscore + betas[parent, child]*incidence[parent, child]                      
+      for (parent in 1:n){
+        sampledscore <- sampledscore + betas[parent, child]*incidence[parent, child]   
       }
   }
   return(sampledscore)
 }
 
 #Importance Weights for the sampled DAGs
-
-importance_DAG <- function(scores, targetDAG_score){
+importance_DAG <- function(DAGs, betas){
+  differ_score <- numeric()
+  
+  #betas = beta_values
+  for (i in 1:length(DAGs)){
+    target_score <- BiDAG::DAGscore(scoreParam, DAGs[[i]])
+    #cat("target_score",i, ":" , target_score, "\n")
+    beta_score <- DAGscore_under_betas(DAGs[[i]], betas[,,i])
+    #cat("beta_score",i, ":" , beta_score, "\n")
+    differ_score[i] <- target_score - beta_score
+  }
   # To avoid numerical issues, subtract the max score before exponentiating
-  scores <- unlist(scores)
-  #max_score <- max(scores)
-  #exp_scores <- exp(scores - max_score)
-  unormalized_weights  <-  targetDAG_score/scores
+  max_score <- max(differ_score)
+  exp_scores <- exp(differ_score - max_score)
   
   # Normalize the exponentiated scores to get the importance weights
-  importance_weights <- unormalized_weights / sum(unormalized_weights)
+  importance_weights <- exp_scores / sum(exp_scores)
+  #cat("importance_weights", ":" , importance_weights, "\n")
   ess_value <- 1 / sum(importance_weights^2)
+  
+  #cat("ess_value", ":" , ess_value, "\n")
   
   return(list(importance_weights = importance_weights, ess_value = ess_value))
 }
 
+importance_DAG_prev <- function(DAGs, s_betas){
+  differ_score <- numeric()
+  target_scores <- numeric()
+  s_betas = DAG_scores[[i]]
+  for (i in 1:length(DAGs)){
+    target_score <- BiDAG::DAGscore(scoreParam, DAGs[[i]])
+    beta_score <- s_betas[[i]]
+    #cat("beta_score",i, ":" , beta_score, "\n")
+    differ_score[i] <- target_score - beta_score
+  }
+  # To avoid numerical issues, subtract the max score before exponentiating
+  max_score <- max(differ_score)
+  exp_scores <- exp(differ_score - max_score)
+  
+  # Normalize the exponentiated scores to get the importance weights
+  importance_weights <- exp_scores / sum(exp_scores)
+  #cat("importance_weights", ":" , importance_weights, "\n")
+  ess_value <- 1 / sum(importance_weights^2)
+  #cat("ess_value", ":" , ess_value, "\n")
+  return(list(importance_weights = importance_weights, ess_value = ess_value))
+}
 
-####### Example 2: Generate random DAGs with 4 nodes
-
-# For binary data
-#scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia)
-#BiDAG:::DAGcorescore(2, c(3,5), n = 8, param = scoreParam)
-
-n <- 14 
-# For continuous data
-scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston)
-#BiDAG:::DAGcorescore(2, c(3,5), n = 14, param = scoreParam)
-itfit<-learnBN(scoreParam,algorithm="orderIter")
-maxEC<-getDAG(itfit,cp=TRUE)
-
-DAG_Test <- list()
-DAG_Test[[1]] <- maxEC
-#target_beta <- calculateBetaScoresArray(DAG_Test, k = length(DAG_Test), n)
-targetDAG_score <- BiDAG::DAGscore(scoreParam, DAG_Test[[1]])  #> targetDAG_score[1] -20157.77
-#targetDAG_score <- 0.89 # Selected test value
 
 # get the probability of a parent node being the parent of a child node
 get_probability <- function(betas, parentNode, childNode, DAG_Test){  
   incidence <- DAG_Test[[1]]
   get_probability <- numeric()
   if (parentNode != childNode) {
-      # Check if parentNode is actually a parent in this DAG
+    # Check if parentNode is actually a parent in this DAG
     exp_beta <- exp(betas[parentNode,childNode, ])
     if (incidence[parentNode, childNode] == 1){
       get_probability <- exp_beta/(1 + exp_beta)
-      }else{
+    }else{
       get_probability <- 1/(1 + exp_beta)
-      }
+    }
   }else{
-      # weight is not applicable for self (node cannot be its own parent)
-      get_probability <- NA
+    # weight is not applicable for self (node cannot be its own parent)
+    get_probability <- NA
   }
   return(get_probability)
 }
 
 
-# Initialize
+####### Example 2: Generate random DAGs with 4 nodes
 
-# Test Case 1 : Create a zero-matrix as our starting betas
-#beta_matrix_init <- matrix(c(0), nrow = 14, ncol = 14, byrow = TRUE)
+binary <- TRUE
 
-# Test Case 2 : Create a random matrix
-# Assuming you want values to be drawn from a normal distribution
-beta_matrix_init <- matrix(rnorm(n * n), nrow = n, ncol = n)
-
-# Replace diagonal elements with NA
-diag(beta_matrix_init) <- NA
-# Convert the matrix to an array
-betas_init <- array(beta_matrix_init, dim = c(14, 14))
-
-# Define the starting order
-permy <- c(1:14)
+if(binary){ 
+  # For binary data
+  n <- 8
+  #scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia[1:500,])
+  scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia)
+  #BiDAG:::DAGcorescore(2, c(3,5), n = 8, param = scoreParam)
+  DAG_Test <- list()
+  DAG_Test[[1]] <- BiDAG::Asiamat
+  targetDAG_score <- BiDAG::DAGscore(scoreParam, DAG_Test[[1]]) #-11105.32
+  
+}else{
+  # For continuous data
+  n <- 14 
+  scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston)
+  itfit<-learnBN(scoreParam,algorithm="orderIter")
+  maxEC<-getDAG(itfit,cp=FALSE)
+  
+  DAG_Test <- list()
+  DAG_Test[[1]] <- maxEC
+  target_beta <- calculateBetaScoresArray(DAG_Test, k = length(DAG_Test), n)
+  targetDAG_score <- BiDAG::DAGscore(scoreParam, DAG_Test[[1]])  #> targetDAG_score[1] -20157.77
+  #targetDAG_score <- 0.89 # Selected test value
+  }
 
 # Calculate move probabilities
 prob1<-99
@@ -134,32 +159,47 @@ if(n>3){ prob1<-round(6*99*n/(n^2+10*n-24)) }
 prob1<-prob1/100
 moveprobs<-c(prob1,0.99-prob1,0.01)
 moveprobs<-moveprobs/sum(moveprobs) # normalisation
+if(!(length(moveprobs)==3)){print('Vector of move probabilities has the wrong length!')}
+
+#start with empty graph or user defined graph  or from other algo. and learn the beta matrix
+starting_dag <- list(matrix(c(0), nrow = n, ncol = n, byrow = TRUE))
+# Replace diagonal elements with NA
+betas_init <- calculateBetaScoresArray(starting_dag, k = 1 ,n)[,,1]
+#base_score <- BiDAG::DAGscore(scoreParam, starting_dag[[1]])
+base_score <- 0
+
+# Define the starting order
+permy <- c(1:n)
 
 # Number of iterations
-iter <- 100
-
+iter <- 10
 weighted_betas <- list(betas_init)
-averaged_beta_ess <- numeric(iter)
-ess_DAGs <- numeric(iter)
+averaged_beta_ess <- numeric()
+ess_DAGs <- numeric()
 DAG_scores <- list()
 
 # Threshold
-epsilon <- 10  # Define a threshold for individual differences
+# Define a threshold for individual differences
+epsilon <- 0.8 # Boston 400, Asia 0.8
 num_steps <- 5  # Number of steps to consider for fluctuation
-difference_threshold <- 1  # Define a threshold for the standard deviation of differences
+# Define a threshold for the standard deviation of differences 
+difference_threshold <- 0.01  # Boston 40, Asia 0.1
 differences <- numeric()  # Initialize a vector to store the last 'num_steps' differences
 
+# Looping
 for (i in 1:iter) {
-  example <- orderMCMC_betas(n,startorder = permy,iterations = 20, 
+  
+  example <- orderMCMC_betas(n,startorder = permy,iterations = 100, 
                              betas = weighted_betas[[i]],
-                             stepsave = 1, moveprobs)
+                             stepsave = 10, moveprobs)
   DAGs <- example[[1]]
   DAG_scores[[i]] <-example[[2]]
   
   beta_values <- calculateBetaScoresArray(DAGs, k = length(DAGs) ,n) #a list of matrices
   
   ### Update beta matrix using importance sampling
-  is_results <- importance_DAG(DAG_scores[[i]], targetDAG_score)
+  #is_results <- importance_DAG(DAGs = DAGs, betas = beta_values)
+  is_results <- importance_DAG_prev(DAGs = DAGs, s_betas = unlist(DAG_scores[[i]]))
   
   # Vectorized multiplication of each matrix by its corresponding weight
   # and then summing up the matrices
@@ -173,68 +213,82 @@ for (i in 1:iter) {
   # Calculate the Frobenius norm of the difference between current and previous matrices
   current_beta_matrix <- weighted_betas[[i + 1]]
   previous_beta_matrix <- weighted_betas[[i]]
-  # # Calculate difference only for non-NA pairs. Replace NA with 0 or other appropriate value
-  current_beta_matrix[is.na(current_beta_matrix)] <- 0
-  previous_beta_matrix[is.na(previous_beta_matrix)] <- 0
   
   # Calculate difference using Frobenius norm
   difference <- norm(current_beta_matrix - previous_beta_matrix, type = "F")
   # Update the differences vector
   differences <- c(differences, difference)
   
-  if(all(differences < epsilon) && sd(differences[(i-num_steps): i]) < difference_threshold) {
-    cat("Convergence achieved based on fluctuation criterion.\n")
+  if((i > num_steps+1)&& 
+     (difference < epsilon) && 
+     sd(differences[(i-num_steps): i]) < difference_threshold) {
+    cat("Convergence achieved based on fluctuation criterion in iteration ", i, "\n")
+    cat("Current order is ", unlist(example[[4]][length(example[[4]])]), "\n")
     break
   }
   
-  ### Update the order for the next iteration
-  permy <- unlist(example[[4]][length(example[[4]])])
-}
+    ### Update the order for the next iteration
+    permy <- unlist(example[[4]][which.max(weights)[1]])
 
+}
 
 print(ess_DAGs)
 
 # Plotting the differences for the beta matrices
-plot(differences, type = "b", main = "Differences Per Iteration", 
+
+plot(differences, type = "b", main = "Differences for Beta_Matrix Per Iteration", 
      xlab = "Iteration", ylab = "Difference", col = "blue")
 
-final_betas <- weighted_betas[[iter + 1]]
-
+final_betas <- weighted_betas[[i + 1]]
 
 ### Build a Consensus Graph from sampled DAGs
-
 # Include an edge in the consensus graph if it appears in a significant number of DAGs
 # Initialize matrices to store edge frequencies and cumulative beta values
 edge_freq <- matrix(0, n, n)
-cumulative_beta <- matrix(0, n, n)
+#cumulative_beta <- matrix(0, n, n)
 
 # Aggregate information from each DAG
 for (i in 1:length(DAGs)) {
   dag <- DAGs[[i]]
-  beta_matrix <- beta_values[,,i]
-  
+  #beta_matrix <- beta_values[,,i]
   for (row in 1:n) {
     for (col in 1:n) {
       if (dag[row, col] == 1) {  # Check if there's an edge
         edge_freq[row, col] <- edge_freq[row, col] + 1
-        cumulative_beta[row, col] <- cumulative_beta[row, col] + beta_matrix[row, col]
+        #cumulative_beta[row, col] <- cumulative_beta[row, col] + beta_matrix[row, col]
       }
     }
   }
 }
 
 # Calculate average beta values
-average_beta <- cumulative_beta / edge_freq # beta values for each edge
-average_beta[is.nan(average_beta)] <- 0  # Handle division by zero
+#average_beta <- cumulative_beta / edge_freq # beta values for each edge
+#average_beta[is.nan(average_beta)] <- 0  # Handle division by zero
 
-# Define a threshold for including edges in the consensus graph
-threshold <- length(DAGs) * 0.5  # Example: edge must appear in more than 50% of DAGs
+threshold_percentage <- seq(0, 1, by = 0.01)  # steps of 0.01
 
-# Build consensus graph
-consensus_graph <- edge_freq >= threshold # The consensus graph 
+#Calculate TP and FP Rates
+true_adj_mat <- BiDAG::Asiamat# the adjacency matrix of the true DAG
 
-# Convert the consensus graph to an adjacency matrix format expected by igraph
-consensus_adj_mat <- ifelse(consensus_graph, 1, 0)
+TP_rates <- numeric(length(threshold_percentage))
+FP_rates <- numeric(length(threshold_percentage))
+
+for (i in 1:length(threshold_percentage)) {
+  threshold_edge <- length(DAGs) * threshold_percentage[i]
+  consensus_graph <- edge_freq >= threshold_edge
+  consensus_adj_mat <- ifelse(consensus_graph, 1, 0)
+  
+  TP <- sum(consensus_adj_mat == 1 & true_adj_mat == 1)
+  FP <- sum(consensus_adj_mat == 1 & true_adj_mat == 0)
+  TN <- sum(consensus_adj_mat == 0 & true_adj_mat == 0)
+  FN <- sum(consensus_adj_mat == 0 & true_adj_mat == 1)
+  
+  TP_rates[i] <- TP / (TP + FN)
+  FP_rates[i] <- FP / (FP + TN)
+}
+
+plot(FP_rates, TP_rates, type = "l", xlab = "False Positive Rate", ylab = "True Positive Rate", main = "Consensus Graph Performance")
+abline(0, 1, col = "red", lty = 2)  # Diagonal line for reference
 
 # Create an igraph graph from the adjacency matrix
 graph <- graph_from_adjacency_matrix(consensus_adj_mat, mode = "directed", diag = FALSE)
@@ -250,3 +304,17 @@ plot(graph,
 
 
 
+# To the skeleton space (from DAG to undirected graph)
+# 'dag_matrix' is the adjacency matrix of the DAG
+skeleton_matrix <- (consensus_adj_mat | t(consensus_adj_mat))  # Union of the DAG and its transpose
+diag(skeleton_matrix) <- 0  # Remove self-loops if present
+
+library(igraph)
+
+# Assume 'dag_object' is an igraph object representing the DAG
+skeleton_object <- as.undirected(consensus_adj_mat, mode = "mutual")
+
+
+
+#pattern space
+#to benchpress
