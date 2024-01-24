@@ -7,7 +7,6 @@
 #This function will return a 3D array where allBetaScores[j, i, k] 
 #represents the beta score of parent node j on child node i in the k-th sampled DAG.
 
-
 calculateBetaScoresArray <- function(sampledDAGs, k, n) {
   # The array dimensions are [number of parents, number of children, number of sampled DAGs]
   allBetaScores <- array(NA, dim = c(n, n, k))

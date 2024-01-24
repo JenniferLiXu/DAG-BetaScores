@@ -138,7 +138,6 @@ if(binary){
   DAG_Test <- list()
   DAG_Test[[1]] <- BiDAG::Asiamat
   targetDAG_score <- BiDAG::DAGscore(scoreParam, DAG_Test[[1]]) #-11105.32
-  
 }else{
   # For continuous data
   n <- 14 
@@ -160,7 +159,7 @@ prob1<-prob1/100
 moveprobs<-c(prob1,0.99-prob1,0.01)
 moveprobs<-moveprobs/sum(moveprobs) # normalisation
 if(!(length(moveprobs)==3)){print('Vector of move probabilities has the wrong length!')}
-
+   
 #start with empty graph or user defined graph  or from other algo. and learn the beta matrix
 starting_dag <- list(matrix(c(0), nrow = n, ncol = n, byrow = TRUE))
 # Replace diagonal elements with NA
@@ -168,43 +167,48 @@ betas_init <- calculateBetaScoresArray(starting_dag, k = 1 ,n)[,,1]
 #base_score <- BiDAG::DAGscore(scoreParam, starting_dag[[1]])
 base_score <- 0
 
-# Define the starting order
-permy <- c(1:n)
-
-# Number of iterations
-iter <- 10
-weighted_betas <- list(betas_init)
-averaged_beta_ess <- numeric()
-ess_DAGs <- numeric()
-DAG_scores <- list()
-
 # Threshold
 # Define a threshold for individual differences
-epsilon <- 0.8 # Boston 400, Asia 0.8
+epsilon <- 0.8  # Boston 400, Asia 0.8
 num_steps <- 5  # Number of steps to consider for fluctuation
 # Define a threshold for the standard deviation of differences 
 difference_threshold <- 0.01  # Boston 40, Asia 0.1
 differences <- numeric()  # Initialize a vector to store the last 'num_steps' differences
 
+# Define the starting order
+permy <- c(1:n)
+
+# Number of iterations
+iter <- 100
+weighted_betas <- list(betas_init)
+averaged_beta_ess <- numeric()
+ess_DAGs <- numeric()
+DAG_scores <- list()
+order_score <- numeric()
+
+#Initialize for OrderMCMC
+order_iter <-  100
+order_stepsize <- 5
+
 # Looping
 for (i in 1:iter) {
-  
-  example <- orderMCMC_betas(n,startorder = permy,iterations = 100, 
+  cat("permy for iter",i, ":" , permy, "\n")
+  example <- orderMCMC_betas(n,startorder = permy,iterations = order_iter, 
                              betas = weighted_betas[[i]],
-                             stepsave = 10, moveprobs)
+                             stepsave = order_stepsize, moveprobs)
+  #print(permy)
   DAGs <- example[[1]]
   DAG_scores[[i]] <-example[[2]]
-  
-  beta_values <- calculateBetaScoresArray(DAGs, k = length(DAGs) ,n) #a list of matrices
   
   ### Update beta matrix using importance sampling
   #is_results <- importance_DAG(DAGs = DAGs, betas = beta_values)
   is_results <- importance_DAG_prev(DAGs = DAGs, s_betas = unlist(DAG_scores[[i]]))
   
-  # Vectorized multiplication of each matrix by its corresponding weight
-  # and then summing up the matrices
+  # Vectorized multiplication of each matrix by its corresponding weight and then summing up the matrices
   weights <- is_results$importance_weights
   #cat("weights",i, ":" , weights, "\n")
+  beta_values <- calculateBetaScoresArray(DAGs, k = length(DAGs) ,n) #a list of matrices
+  
   weighted_betas[[i + 1]]  <- Reduce("+", lapply(1:length(weights), 
                                                  function(k) beta_values[,,k] * weights[k]))
   ess_DAGs[i] <-is_results$ess_value
@@ -214,7 +218,6 @@ for (i in 1:iter) {
   current_beta_matrix <- weighted_betas[[i + 1]]
   previous_beta_matrix <- weighted_betas[[i]]
   
-  # Calculate difference using Frobenius norm
   difference <- norm(current_beta_matrix - previous_beta_matrix, type = "F")
   # Update the differences vector
   differences <- c(differences, difference)
@@ -227,19 +230,36 @@ for (i in 1:iter) {
     break
   }
   
-    ### Update the order for the next iteration
-    permy <- unlist(example[[4]][which.max(weights)[1]])
 
+  #if((i > 1) && (ess_DAGs[i] > ess_DAGs[i-1])){
+  if(difference > 300){
+    #cat("ess_DAGs[i] < ess_DAGs[i]", permy, "\n")
+    #permy <- unlist(example[[4]][1])
+    #permy <- unlist(example[[4]][length(example[[4]])])
+    #permy <- unlist(example[[4]][which.max(DAG_scores[[i]])[1]])
+    permy <- permy
+    order_score[i] <- example[[3]][length(example[[3]])]
+  }else{
+    ### Update the order for the next iteration
+    #permy <- unlist(example[[4]][length(example[[4]])])
+    #permy <- unlist(example[[4]][which.max(example[[3]])[1]])
+    permy <- unlist(example[[4]][which.max(weights)[1]])
+    order_score[i] <- example[[3]][which.max(weights)]
+  }
 }
 
 print(ess_DAGs)
 
 # Plotting the differences for the beta matrices
-
-plot(differences, type = "b", main = "Differences for Beta_Matrix Per Iteration", 
-     xlab = "Iteration", ylab = "Difference", col = "blue")
+plot(#differences[-c(1:3)], 
+     differences, 
+     col = "blue",
+     type = "b", main = "Differences for Beta_Matrix Per Iteration", 
+     xlab = "Iteration", ylab = "Difference")
+lines(c(1:iter), ess_DAGs, type = "o", col = "red")
 
 final_betas <- weighted_betas[[i + 1]]
+
 
 ### Build a Consensus Graph from sampled DAGs
 # Include an edge in the consensus graph if it appears in a significant number of DAGs
@@ -264,7 +284,6 @@ for (i in 1:length(DAGs)) {
 # Calculate average beta values
 #average_beta <- cumulative_beta / edge_freq # beta values for each edge
 #average_beta[is.nan(average_beta)] <- 0  # Handle division by zero
-
 threshold_percentage <- seq(0, 1, by = 0.01)  # steps of 0.01
 
 #Calculate TP and FP Rates
@@ -303,16 +322,18 @@ plot(graph,
      vertex.label.cex = 0.8)
 
 
-
 # To the skeleton space (from DAG to undirected graph)
-# 'dag_matrix' is the adjacency matrix of the DAG
 skeleton_matrix <- (consensus_adj_mat | t(consensus_adj_mat))  # Union of the DAG and its transpose
 diag(skeleton_matrix) <- 0  # Remove self-loops if present
 
 library(igraph)
-
-# Assume 'dag_object' is an igraph object representing the DAG
-skeleton_object <- as.undirected(consensus_adj_mat, mode = "mutual")
+graph_skeleton <- graph_from_adjacency_matrix(skeleton_matrix, mode = "undirected", diag = FALSE)
+#skeleton_object <- as.undirected(graph_skeleton, mode = "mutual")
+# Plot the graph
+plot(graph_skeleton, 
+     main = "Skeleton Graph",
+     edge.arrow.size = 0.5, vertex.color = "lightgreen",
+     vertex.size = 15, vertex.label.color = "black", vertex.label.cex = 0.8)
 
 
 

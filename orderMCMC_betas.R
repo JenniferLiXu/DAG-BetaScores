@@ -37,7 +37,6 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
       
       chosenmove<-sample.int(3,1,prob=moveprobs)
       if(chosenmove<3){	# if it is 3 then we stay still
-        
         proposedpermy<-currentpermy #sample a new order by swapping two elements
         switch(as.character(chosenmove),
                "1"={ # swap any two elements at random
@@ -65,12 +64,10 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         proposedtotallogscore<-currenttotallogscore-sum(currentorderscores[rescorenodes])+sum(proposedorderrescored[rescorenodes]) #and the new log total score by updating only the necessary nodes
         
         scoreratio<-exp(proposedtotallogscore-currenttotallogscore) #acceptance probability
-        
-        #cat("proposedtotallogscore:", proposedtotallogscore, "\n")
-        #cat("currenttotallogscore:", currenttotallogscore, "\n")
+        #cat("differ betw. totallogscore:", proposedtotallogscore-currenttotallogscore, "\n")
         #cat("scoreratio:", scoreratio, "\n")
         
-        if(runif(1) <scoreratio){ #Move accepted then set the current order and scores to the proposal
+        if(2*runif(1) < scoreratio){ #Move accepted then set the current order and scores to the proposal
           currentpermy<-proposedpermy
           currentorderscores[rescorenodes]<-proposedorderrescored[rescorenodes]
           currenttotallogscore<-proposedtotallogscore
@@ -85,7 +82,8 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
     L3[[z]]<-currenttotallogscore #and the current order score
     L4[[z]]<-currentpermy #and store current order
   }
-  cat("acceptance_prob:", acceptance_prob, "\n")
+  #cat("acceptance_prob:", acceptance_prob, "\n")
+  
   return(list(L1,L2,L3,L4))
 }
 

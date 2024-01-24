@@ -29,7 +29,6 @@ samplescore<-function(n, betas, permy, base_score){
         }
 
         incidence[parent, child] <- sample(c(0,1), 1, prob = c(1,exp(min(betas[parent, child], max_val))))
-        
         sampledscore <- sampledscore + betas[parent, child]*incidence[parent, child]                      
       }
     }
