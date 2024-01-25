@@ -22,6 +22,7 @@ source('./orderMCMC_betas.R')
 source('./orderscore_betas.R')
 source('./samplefns-beta.R')
 source('./scoring/scorefns.R')
+source('./importance_sampling_beta.R')
 
 #Use the function to calculate beta values
 source('./calculateBetaScoresArray.R')
@@ -41,98 +42,16 @@ pcFit <- pc(suffStat = list(C = cor(data), n = nrow(data)),
 # Convert the output to an adjacency matrix
 adjMatrix <- as(pcFit, "amat")
 
-#DAG <-samplescore(n,betas,permy)
-#calculateBetaScoresArray(sampledDAGs = DAG, n)
-
-#Score of a DAG with given beta matrix
-DAGscore_under_betas <- function(incidence, betas){
-  diag(betas) <- 0
-  sampledscore<-0
-  for (child in 1:n){
-      for (parent in 1:n){
-        sampledscore <- sampledscore + betas[parent, child]*incidence[parent, child]   
-      }
-  }
-  return(sampledscore)
-}
-
-#Importance Weights for the sampled DAGs
-importance_DAG <- function(DAGs, betas){
-  differ_score <- numeric()
-  
-  #betas = beta_values
-  for (i in 1:length(DAGs)){
-    target_score <- BiDAG::DAGscore(scoreParam, DAGs[[i]])
-    #cat("target_score",i, ":" , target_score, "\n")
-    beta_score <- DAGscore_under_betas(DAGs[[i]], betas[,,i])
-    #cat("beta_score",i, ":" , beta_score, "\n")
-    differ_score[i] <- target_score - beta_score
-  }
-  # To avoid numerical issues, subtract the max score before exponentiating
-  max_score <- max(differ_score)
-  exp_scores <- exp(differ_score - max_score)
-  
-  # Normalize the exponentiated scores to get the importance weights
-  importance_weights <- exp_scores / sum(exp_scores)
-  #cat("importance_weights", ":" , importance_weights, "\n")
-  ess_value <- 1 / sum(importance_weights^2)
-  
-  #cat("ess_value", ":" , ess_value, "\n")
-  
-  return(list(importance_weights = importance_weights, ess_value = ess_value))
-}
-
-importance_DAG_prev <- function(DAGs, s_betas){
-  differ_score <- numeric()
-  target_scores <- numeric()
-  s_betas = DAG_scores[[i]]
-  for (i in 1:length(DAGs)){
-    target_score <- BiDAG::DAGscore(scoreParam, DAGs[[i]])
-    beta_score <- s_betas[[i]]
-    #cat("beta_score",i, ":" , beta_score, "\n")
-    differ_score[i] <- target_score - beta_score
-  }
-  # To avoid numerical issues, subtract the max score before exponentiating
-  max_score <- max(differ_score)
-  exp_scores <- exp(differ_score - max_score)
-  
-  # Normalize the exponentiated scores to get the importance weights
-  importance_weights <- exp_scores / sum(exp_scores)
-  #cat("importance_weights", ":" , importance_weights, "\n")
-  ess_value <- 1 / sum(importance_weights^2)
-  #cat("ess_value", ":" , ess_value, "\n")
-  return(list(importance_weights = importance_weights, ess_value = ess_value))
-}
 
 
-# get the probability of a parent node being the parent of a child node
-get_probability <- function(betas, parentNode, childNode, DAG_Test){  
-  incidence <- DAG_Test[[1]]
-  get_probability <- numeric()
-  if (parentNode != childNode) {
-    # Check if parentNode is actually a parent in this DAG
-    exp_beta <- exp(betas[parentNode,childNode, ])
-    if (incidence[parentNode, childNode] == 1){
-      get_probability <- exp_beta/(1 + exp_beta)
-    }else{
-      get_probability <- 1/(1 + exp_beta)
-    }
-  }else{
-    # weight is not applicable for self (node cannot be its own parent)
-    get_probability <- NA
-  }
-  return(get_probability)
-}
-
-
-####### Example 2: Generate random DAGs with 4 nodes
+####### Example: Generate random DAGs with 4 nodes
 
 binary <- TRUE
 
 if(binary){ 
   # For binary data
   n <- 8
-  #scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia[1:500,])
+  #scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia[1:10,])
   scoreParam <- BiDAG::scoreparameters("bde", BiDAG::Asia)
   #BiDAG:::DAGcorescore(2, c(3,5), n = 8, param = scoreParam)
   DAG_Test <- list()
@@ -163,21 +82,9 @@ if(!(length(moveprobs)==3)){print('Vector of move probabilities has the wrong le
 #start with empty graph or user defined graph  or from other algo. and learn the beta matrix
 starting_dag <- list(matrix(c(0), nrow = n, ncol = n, byrow = TRUE))
 # Replace diagonal elements with NA
-betas_init <- calculateBetaScoresArray(starting_dag, k = 1 ,n)[,,1]
+betas <- calculateBetaScoresArray(starting_dag, k = 1 ,n)[,,1]
 #base_score <- BiDAG::DAGscore(scoreParam, starting_dag[[1]])
 base_score <- 0
-
-# Threshold
-# Define a threshold for individual differences
-epsilon <- 0.8  # Boston 400, Asia 0.8
-num_steps <- 5  # Number of steps to consider for fluctuation
-# Define a threshold for the standard deviation of differences 
-difference_threshold <- 0.01  # Boston 40, Asia 0.1
-differences <- numeric()  # Initialize a vector to store the last 'num_steps' differences
-
-# Define the starting order
-permy <- c(1:n)
-
 # Number of iterations
 iter <- 100
 weighted_betas <- list(betas_init)
@@ -189,6 +96,90 @@ order_score <- numeric()
 #Initialize for OrderMCMC
 order_iter <-  100
 order_stepsize <- 5
+
+#Initialize the Parallel Environment
+library(parallel)
+numCores <- detectCores()  # Detect the number of available CPU cores
+cl <- makeCluster(numCores)  # Create a cluster with the number of cores
+
+# Generate a set of different initial orders
+initialOrders <- lapply(1:numCores, function(x) sample(1:n))
+
+gibbsSampling <- function(initialOrder) {
+  # Initialize variables (like starting DAG, betas, etc.) based on 'initialOrder'
+  example <- orderMCMC_betas(n,startorder = initialOrder,iterations = order_iter, 
+                             betas = betas,
+                             stepsave = order_stepsize, moveprobs)
+  # Implement the recursive steps of your Gibbs sampling process here
+  DAGs <- example[[1]]
+  DAG_scores[[i]] <-example[[2]]
+  
+  ### Update beta matrix using importance sampling
+  is_results <- importance_DAG_prev(DAGs = DAGs, s_betas = unlist(DAG_scores[[i]]))
+  
+  # Vectorized multiplication of each matrix by its corresponding weight and then summing up the matrices
+  weights <- is_results$importance_weights
+  #cat("weights",i, ":" , weights, "\n")
+  beta_values <- calculateBetaScoresArray(DAGs, k = length(DAGs) ,n) #a list of matrices
+  
+  weighted_betas[[i + 1]]  <- Reduce("+", lapply(1:length(weights), 
+                                                 function(k) beta_values[,,k] * weights[k]))
+  ess_DAGs[i] <-is_results$ess_value
+  
+  ### Stopping criteria for beta matrix convergence
+  # Calculate the Frobenius norm of the difference between current and previous matrices
+  current_beta_matrix <- weighted_betas[[i + 1]]
+  previous_beta_matrix <- weighted_betas[[i]]
+  
+  difference <- norm(current_beta_matrix - previous_beta_matrix, type = "F")
+  # Update the differences vector
+  differences <- c(differences, difference)
+  
+  if(difference > 300){
+    #cat("ess_DAGs[i] < ess_DAGs[i]", permy, "\n")
+    #permy <- unlist(example[[4]][1])
+    #permy <- unlist(example[[4]][length(example[[4]])])
+    #permy <- unlist(example[[4]][which.max(DAG_scores[[i]])[1]])
+    permy <- permy
+    order_score[i] <- example[[3]][length(example[[3]])]
+  }else{
+    ### Update the order for the next iteration
+    #permy <- unlist(example[[4]][length(example[[4]])])
+    #permy <- unlist(example[[4]][which.max(example[[3]])[1]])
+    permy <- unlist(example[[4]][which.max(weights)[1]])
+    order_score[i] <- example[[3]][which.max(weights)]
+  }
+  
+  # Return the results (e.g., final DAG structure, beta matrix)
+  
+  
+}
+
+
+
+clusterExport(cl, varlist = c("gibbsSampling", "calculateBetaScoresArray", "orderMCMC_betas", "importance_DAG_prev", ...))
+
+# Define a function for parallel execution
+parallelFunction <- function(iterIndex) {
+  # Your existing code for each iteration, using iterIndex as the loop variable
+  # ...
+  # Return results needed for aggregation
+}
+
+# Execute in parallel
+results <- parLapply(cl, 1:iter, parallelFunction)
+
+
+
+# Threshold
+# Define a threshold for individual differences
+epsilon <- 0.8  # Boston 400, Asia 0.8
+num_steps <- 5  # Number of steps to consider for fluctuation
+# Define a threshold for the standard deviation of differences 
+difference_threshold <- 0.01  # Boston 40, Asia 0.1
+differences <- numeric()  # Initialize a vector to store the last 'num_steps' differences
+
+
 
 # Looping
 for (i in 1:iter) {
@@ -250,6 +241,8 @@ for (i in 1:iter) {
 
 print(ess_DAGs)
 
+plot(unlist(order_score))
+
 # Plotting the differences for the beta matrices
 plot(#differences[-c(1:3)], 
      differences, 
@@ -260,6 +253,10 @@ lines(c(1:iter), ess_DAGs, type = "o", col = "red")
 
 final_betas <- weighted_betas[[i + 1]]
 
+#gibb sampling
+# continuous data (first try with gaussian)
+# the order score using current and the proposed new beta matrix
+# the processure satisfied the detailed balance proof
 
 ### Build a Consensus Graph from sampled DAGs
 # Include an edge in the consensus graph if it appears in a significant number of DAGs

@@ -40,18 +40,4 @@ orderscore_betas <- function(n,scorenodes, betas, permy) {
   
 }
 
-# currentpermy <- c(1, 6, 7, 5, 8, 2, 4, 3 )
-# proposdedpermy <- c(7 ,6, 1, 5, 8, 2, 4, 3 )
-# (currentpermy_score <- orderscore_betas (n,scorenodes = c(1,6,7), betas, currentpermy))
-# (proposedpermy_score <- orderscore_betas (n,scorenodes = c(1,6,7) , betas, proposdedpermy))
-#   
-# beta : 6 1 is: -2.828407 
-# beta : 7 1 is: -3.088243 
-# beta : 8 1 is: -3.092051 
-# beta : 7 6 is: 928.7908 
-# 
-# 
-# beta : 8 1 is: -3.092051 
-# beta : 1 6 is: -2.828407 
-# beta : 6 7 is: 928.7908 
-# beta : 1 7 is: -3.088243 
+

@@ -67,7 +67,7 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         #cat("differ betw. totallogscore:", proposedtotallogscore-currenttotallogscore, "\n")
         #cat("scoreratio:", scoreratio, "\n")
         
-        if(2*runif(1) < scoreratio){ #Move accepted then set the current order and scores to the proposal
+        if(runif(1) < scoreratio){ #Move accepted then set the current order and scores to the proposal
           currentpermy<-proposedpermy
           currentorderscores[rescorenodes]<-proposedorderrescored[rescorenodes]
           currenttotallogscore<-proposedtotallogscore
