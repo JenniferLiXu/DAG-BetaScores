@@ -26,14 +26,18 @@ set.seed(123)
 
 n <- 7
 scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:100,1:n])
-itfit<-learnBN(scoreParam,algorithm="orderIter")
-maxEC<-getDAG(itfit,cp=FALSE)
+#itfit<-learnBN(scoreParam,algorithm="orderIter")
+#maxEC<-getDAG(itfit,cp=FALSE)
 
-DAG_Test <- list()
-DAG_Test[[1]] <- maxEC
-target_beta <- calculateBetaScoresArray(DAG_Test, k = length(DAG_Test), n)
+#posterior probabilities of edges by averaging over a sample of DAGs obtained via an MCMC scheme.
+samplefit<-sampleBN(scoreParam, "order")
+edgesposterior<-edgep(samplefit, pdag=TRUE, burnin=0.2)
 
-# Calculate move probabilities
+# DAG_Test <- list()
+# DAG_Test[[1]] <- maxEC
+# target_beta <- calculateBetaScoresArray(DAG_Test, k = length(DAG_Test), n)
+
+# Move probabilities
 prob1<-99
 if(n>3){ prob1<-round(6*99*n/(n^2+10*n-24)) }
 prob1<-prob1/100
@@ -41,23 +45,22 @@ moveprobs<-c(prob1,0.99-prob1,0.01)
 moveprobs<-moveprobs/sum(moveprobs) # normalisation
 if(!(length(moveprobs)==3)){print('Vector of move probabilities has the wrong length!')}
 
-#start with empty graph or user defined graph  or from other algo. and learn the beta matrix
+# Start with empty graph (OR user defined graph OR from other algo. and learn the beta matrix)
 starting_dag <- list(matrix(c(0), nrow = n, ncol = n, byrow = TRUE))
 betas_init <- calculateBetaScoresArray(starting_dag, k = 1 ,n)[,,1]
 #base_score <- BiDAG::DAGscore(scoreParam, starting_dag[[1]])
 base_score <- 0
-# Number of iterations
-iter <- 1000
-weighted_betas <- list(betas_init)
-averaged_beta_ess <- numeric()
+
+# Initialization
+iter <- 400
+weighted_betas <- list(betas_init) # Starting beta_matrix
+order <- list(c(1:n)) # Starting order
+
 ess_DAGs <- numeric()
 DAG_scores <- list()
-DAG <- list()
+DAG <- list() # Store the weighted DAG from each iteration based on the update weighted beta_matrix
 DAG_total <- matrix(0, n, n)
-
-
-order <- list(c(1:n))
-totallogscore<-list(sum(orderscore_betas(n,c(1:n), weighted_betas[[1]], order[[1]]))) #starting score
+#totallogscore<-list(sum(orderscore_betas(n,c(1:n), weighted_betas[[1]], order[[1]]))) #starting score
 
 #Initialize for OrderMCMC
 order_iter <-  100
@@ -79,16 +82,15 @@ for (i in 1:iter) {
   #Store the last order from the chain
   permy <- unlist(example[[4]][length(example[[4]])])
   order[[i+1]] <- permy
-  #print(permy)
-  
-  # Initialize a list to store the sampled DAGs and their info
+
+  # Initialize a list to store the sampled DAGs using the last order form OrderMCMC and their info
   sampled_DAGs <- vector("list", 10)
   incidence_matrices <- list()
   sampled_DAGs <- lapply(1:10, function(x) samplescore(n, beta_prev, permy, base_score))
   incidence_matrices <-lapply(sampled_DAGs, function(dag) dag$incidence) #store adjacency matrix of a sampled DAG each 'stepsave'
   incidence_logscore<-lapply(sampled_DAGs, function(dag) dag$logscore) #and log score of a sampled DAG
 
-  ### Update beta matrix using importance sampling
+  ### Update beta matrix using importance sampling from the sampled DAGs
   is_results <- importance_DAG_prev(DAGs = incidence_matrices, s_betas = incidence_logscore)
   
   # Vectorized multiplication of each matrix by its corresponding weight and then summing up the matrices
@@ -110,6 +112,7 @@ for (i in 1:iter) {
   # Update the differences vector
   differences <- c(differences, difference)
   
+  # The weight based on the current/proposed(start/end) orderlogscore using the current/proposed beta_matrix
   order_s_beta_s <- sum(orderscore_betas(n,c(1:n), weighted_betas[[i]], order[[i]]))
   order_s_beta_e <- sum(orderscore_betas(n,c(1:n), weighted_betas[[i+1]], order[[i]]))
   order_e_beta_s <- sum(orderscore_betas(n,c(1:n), weighted_betas[[i]], order[[i+1]]))
@@ -120,16 +123,18 @@ for (i in 1:iter) {
   #cat("ratio",i, ":" , ratio,"\n")
   DAG[[i]] <- ratio*samplescore(n, weighted_betas[[i + 1]], order[[i+1]], base_score)$incidence
   
-  if(i < 7){
-    DAG_total <- DAG_total + DAG[[i]]
-    diff_BiDAG <- norm(as.matrix(DAG_total/i - maxEC), type = "F")
-  }else if(i == 7){
-    DAG_total <- DAG[[i]]
-    diff_BiDAG <- norm(as.matrix(DAG_total - maxEC), type = "F")
-  }else{
-    DAG_total <- DAG_total + DAG[[i]]
-    diff_BiDAG <- norm(as.matrix(DAG_total/(i-6) - maxEC), type = "F")
-  }
+  DAG_total <- DAG_total + DAG[[i]]
+  diff_BiDAG <- norm(as.matrix(DAG_total/i - edgesposterior), type = "F")
+  # if(i < 7){
+  #   DAG_total <- DAG_total + DAG[[i]]
+  #   diff_BiDAG <- norm(as.matrix(DAG_total/i - edgesposterior), type = "F")
+  # }else if(i == 7){
+  #   DAG_total <- DAG[[i]]
+  #   diff_BiDAG <- norm(as.matrix(DAG_total - edgesposterior), type = "F")
+  # }else{
+  #   DAG_total <- DAG_total + DAG[[i]]
+  #   diff_BiDAG <- norm(as.matrix(DAG_total/(i-6) - edgesposterior), type = "F")
+  # }
 
   
   diff_BiDAGs <- c(diff_BiDAGs, diff_BiDAG)
@@ -147,6 +152,18 @@ plot(#differences[-c(1:3)],
   type = "b", main = "Differences for Beta_Matrix Per Iteration", 
   xlab = "Iteration", ylab = "Difference")
 
+
+
+
+
+
+
+
+
+
+
+
+########### Graphing part ############
 
 ### Build a Consensus Graph from sampled DAGs
 # Include an edge in the consensus graph if it appears in a significant number of DAGs
