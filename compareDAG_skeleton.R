@@ -6,8 +6,7 @@ combineProbabilities <- function(dag_probs) {
   return(undirected_probs)
 }
 
-CompareDAG_skeleton <-function(sampled_dag, target_dag){
-  sampled_dag_skeleton <- combineProbabilities(sampled_dag)
+CompareDAG_skeleton <-function(sampled_dag_skeleton, target_dag){
   target_dag_skeleton <- combineProbabilities(target_dag)
   
   num_nodes <- nrow(target_dag)

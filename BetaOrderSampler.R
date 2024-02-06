@@ -5,11 +5,15 @@
 # base_score : the initial score, set to 0 by default.
 # starting_dag : an optional parameter to start with a user-defined DAG. If not provided, it starts with an empty DAG.
 # edgesposterior : the matrix of edge probabilities in the target (true) DAG.
+# burrnin : burn in iteration, by default 20 percent 
 
 # Output: a list containing the final DAGs, edge differences over each iteration, 
 #         ESS values, acceptance counts, and differences from the target DAG.
 
-BetaOrderSampler <- function(n, iter, order_iter, order = list(seq_len(n)), order_stepsize, moveprobs, base_score = 0, starting_dag = NULL, edgesposterior) {
+BetaOrderSampler <- function(n, iter, order_iter, order = list(seq_len(n)), 
+                             order_stepsize, moveprobs, base_score = 0, 
+                             starting_dag = NULL, 
+                             edgesposterior, burnin = 0.2 ) {
   # Initialize starting DAG if not provided
   if (is.null(starting_dag)) {
     starting_dag <- list(matrix(0, nrow = n, ncol = n))
@@ -21,10 +25,13 @@ BetaOrderSampler <- function(n, iter, order_iter, order = list(seq_len(n)), orde
   weights <- list(1)
   ess_DAGs <- numeric()
   DAG <- starting_dag
+  skeleton_DAG <- starting_dag
+  total_DAG <- matrix(0, nrow = n, ncol = n)
   single_DAG <- starting_dag
   count_accept <- numeric()
   diff_BiDAGs <- numeric()
   edge_diff_over_time <- array(0, dim = c(n, n, iter))
+  burin_iter <- floor(burnin*iter)
   
   # Looping through iterations
   for (i in 1:iter) {
@@ -42,7 +49,7 @@ BetaOrderSampler <- function(n, iter, order_iter, order = list(seq_len(n)), orde
     max_order_score <- max(unlist(example[[3]]))
     permy <- example[[4]][which(example[[3]] == max_order_score)][[1]]
     
-    #  Sample 10 DAGs using the last order from OrderMCMC
+    #  Sample 10 DAGs using the order with highest score from OrderMCMC
     sampled_DAGs <- lapply(1:20, function(x) samplescore(n, beta_prev, permy, base_score))
     
     # Extracting incidence matrices and log scores
@@ -59,13 +66,15 @@ BetaOrderSampler <- function(n, iter, order_iter, order = list(seq_len(n)), orde
     beta_values <- calculateBetaScoresArray(incidence_matrices, k = length(incidence_matrices) ,n) 
     weighted_betas_proposed <- Reduce("+", lapply(1:length(weights_proposed), 
                                                   function(k) beta_values[,,k] * weights_proposed[k]))
+    
+    # Log score of Proposed DAG set under the previous beta_matrix 
     proposed_logscore <- Reduce("+", lapply(1:length(weights_proposed), 
                                             function(k) incidence_logscore[[k]] * weights_proposed[k]))
     
     # Calculate current log score
     #current_logscore <- calculate_DAG_score(DAG = DAGs[[i]], permy = order[[i]], 
     #                                        weights = weights[[i]],betas = weighted_betas_proposed)
-    
+    # Log score of previous DAG set under the proposed beta matrix
     current_logscore <- calculate_singleDAG_score(DAG = single_DAG[[i]], permy = order[[i]],
                                                   betas = weighted_betas_proposed)
     
@@ -75,26 +84,28 @@ BetaOrderSampler <- function(n, iter, order_iter, order = list(seq_len(n)), orde
     # Metropolis-Hastings acceptance step
     if((i == 1 )|| (runif(1) < ratio)){ 
       DAG[[i]] <- single_DAG[[i+1]]
+      skeleton_DAG[[i]] <- combineProbabilities(single_DAG[[i+1]])
       weighted_betas[[i+1]] <- weighted_betas_proposed
       order[[i+1]] <- permy
       weights[[i+1]] <- weights_proposed
       count_accept[i] <- 1 # Accept 
     }else{
       DAG[[i]] <- DAG[[i-1]]
+      skeleton_DAG[[i]] <- skeleton_DAG[[i-1]]
       weighted_betas[[i+1]] <- weighted_betas[[i]]
       order[[i+1]] <- order[[i]]
       weights[[i+1]] <- weights[[i]]
       count_accept[i] <- 0 # Reject
     }
     
-    if (length(DAG) >= 10) {
+    if (length(DAG) > burin_iter) {
       # Get the last few matrices
-      last_matrices <- DAG[(length(DAG)-9):length(DAG)]
-      sum_matrix <- Reduce("+", last_matrices) # Sum the matrices
+      total_DAG <- total_DAG + skeleton_DAG[[i]]
+      #sum_matrix <- Reduce("+", last_matrices) # Sum the matrices
       # Update diff_BiDAG
-      diff_mat <- CompareDAG_skeleton(sum_matrix/10, edgesposterior)
+      diff_mat <- CompareDAG_skeleton(total_DAG/(i-burin_iter), edgesposterior)
     }else{
-      sum_matrix <- Reduce("+", DAG[1:length(DAG)])
+      sum_matrix <- Reduce("+", skeleton_DAG[1:length(DAG)])
       # Update diff_BiDAG
       diff_mat <- CompareDAG_skeleton(sum_matrix/i, edgesposterior)
     }

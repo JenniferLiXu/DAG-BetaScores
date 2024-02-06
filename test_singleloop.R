@@ -44,22 +44,24 @@ prob1<-prob1/100
 moveprobs<-c(prob1,0.99-prob1,0.01)
 moveprobs<-moveprobs/sum(moveprobs) # normalisation
 if(!(length(moveprobs)==3)){print('Vector of move probabilities has the wrong length!')}
-
+ 
 # Start with empty graph (OR user defined graph OR from other algo. and learn the beta matrix)
 base_score <- 0 # Initialize the base score
 
 # Initialization Parameters
-num_iterations <- 50 # Total iterations
+num_iterations <- 200 # Total iterations
 
 # Example 
-results <- BetaOrderSampler(n = n, iter = num_iterations, order_iter = 100, order_stepsize = 10, moveprobs = moveprobs, edgesposterior = edgesposterior)
+results <- BetaOrderSampler(n = n, iter = num_iterations, order_iter = 100, 
+                            order_stepsize = 10, moveprobs = moveprobs, 
+                            edgesposterior = edgesposterior)
 
 
 sum(results$acceptCount)
 
 ########## Plotting the differences for the beta matrices
-plot(#differences[-c(1:3)], 
-  results$diffBiDAGs,
+plot(#differences[-c(1:3)],  
+  results$diffBiDAGs[seq(1, length(results$diffBiDAGs), by = 10)],
   #diff_BiDAGs[seq(5, length(diff_BiDAGs), by = 5)], 
   col = "blue",
   type = "b", main = "Differences for Beta_Matrix Per Iteration", 
@@ -79,7 +81,7 @@ color_index <- 1
 for (row in 1:(n - 1)) {
   for (col in (row + 1):n) {
     #lines(1:num_iterations, results$edgeDifferences[row, col, ], col = colors[color_index], type = 'l')
-    lines(seq(1, num_iterations, by = 5), results$edgeDifferences[row, col, seq(1, num_iterations, by = 5)], col = colors[color_index], type = 'l')
+    lines(seq(1, num_iterations, by = 10), results$edgeDifferences[row, col, seq(1, num_iterations, by = 10)], col = colors[color_index], type = 'l')
     legend_labels <- c(legend_labels, paste('Edge', row, '-', col))
     color_index <- color_index + 1
   }
