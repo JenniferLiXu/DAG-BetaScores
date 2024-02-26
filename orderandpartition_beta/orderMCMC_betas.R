@@ -52,20 +52,12 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         proposedpermy[sampledelements]<-currentpermy[rev(sampledelements)] #proposed new order
         
         rescorenodes<-proposedpermy[min(sampledelements):max(sampledelements)] #we only need to rescore these nodes between the swapped elements to speed up the calculation
-        #cat("currentpermy:", currentpermy, "\n")
-        #cat("proposedpermy:", proposedpermy, "\n")
-        ####
+
         proposedorderrescored<-orderscore_betas(n,rescorenodes, betas, proposedpermy)#their scores
-        ####
-        
-        #cat("sum(currentorderscores[rescorenodes]):", sum(currentorderscores[rescorenodes]), "\n")
-        #cat("sum(proposedorderrescored[rescorenodes]):", sum(proposedorderrescored[rescorenodes]), "\n")
         
         proposedtotallogscore<-currenttotallogscore-sum(currentorderscores[rescorenodes])+sum(proposedorderrescored[rescorenodes]) #and the new log total score by updating only the necessary nodes
         
         scoreratio<-exp(proposedtotallogscore-currenttotallogscore) #acceptance probability
-        #cat("differ betw. totallogscore:", proposedtotallogscore-currenttotallogscore, "\n")
-        #cat("scoreratio:", scoreratio, "\n")
         
         if(runif(1) < scoreratio){ #Move accepted then set the current order and scores to the proposal
           currentpermy<-proposedpermy

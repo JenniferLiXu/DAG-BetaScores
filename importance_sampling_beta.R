@@ -4,10 +4,10 @@
 importance_DAG <- function(DAGs, score_under_betas){
   differ_score <- numeric()
   target_scores <- numeric()
+  
   for (i in 1:length(DAGs)){
     target_score <- BiDAG::DAGscore(scoreParam, DAGs[[i]])
     beta_score <- score_under_betas[[i]]
-    #cat("beta_score",i, ":" , beta_score, "\n")
     differ_score[i] <- target_score - beta_score
   }
   # To avoid numerical issues, subtract the max score before exponentiating
@@ -16,7 +16,7 @@ importance_DAG <- function(DAGs, score_under_betas){
   
   # Normalize the exponentiated scores to get the importance weights
   importance_weights <- exp_scores / sum(exp_scores)
-  #cat("importance_weights", ":" , importance_weights, "\n")
+
   ess_value <- 1 / sum(importance_weights^2)
   
   compress_dag <- Reduce("+", lapply(1:length(importance_weights), 

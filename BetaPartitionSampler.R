@@ -9,8 +9,11 @@
 
 # Output: a list containing the final DAGs, edge differences over each iteration, 
 #         ESS values, acceptance counts, and differences from the target DAG.
-
-BetaOrderSampler <- function(n, iter, order_iter, order = NULL, 
+# 
+# iter = 10
+# order_iter = 100
+# order_stepsize = 10
+BetaPartitionSampler <- function(n, iter, order_iter, order = NULL, party = NULL,
                              order_stepsize, moveprobs, base_score = 0, 
                              starting_dag = NULL, betas_init = NULL, skeleton = FALSE,
                              edgesposterior, burnin = 0.2 ) {
@@ -25,6 +28,10 @@ BetaOrderSampler <- function(n, iter, order_iter, order = NULL,
   # Initialize order
   if (is.null(order)) {
     order <-  list(seq_len(n))
+  }
+  # Initialize partition
+  if (is.null(party)) {
+    party<-list(c(n)) # a starting partition - c(n) gives the empty DAG
   }
   
   # Initialize variables
@@ -45,17 +52,21 @@ BetaOrderSampler <- function(n, iter, order_iter, order = NULL,
   for (i in 1:iter) {
     beta_prev <- weighted_betas[[i]]
     order_prev <- order[[i]]
+    party_prev <- party[[i]]
     
-    # Sampling orders with OrderMCMC
-    example <- orderMCMC_betas(n,startorder = order_prev ,iterations = order_iter, 
-                               betas = beta_prev,
-                               stepsave = order_stepsize, moveprobs) # run the Order MCMC code
+    # Sampling orders with PartitionMCMC
+    example <- partitionMCMC_betas(n,startpermy = order_prev,startparty = party_prev,iterations = order_iter ,
+                             stepsave = order_stepsize ,betas = beta_prev,moveprobs) 
     
     #Store the last order from the chain
     permy <- unlist(example[[4]][length(example[[4]])])
-    
-    #  Sample 30 DAGs using the last sampled order from OrderMCMC
-    sampled_DAGs <- lapply(1:30, function(x) samplescore(n, beta_prev, permy, base_score))
+    partition <- unlist(example[[5]][length(example[[5]])])
+
+    #  Sample 30 DAGs using the last sampled order from PartitionMCMC
+    sampled_DAGs <- lapply(1:30, function(x) samplescore_partition(n, betas = beta_prev, 
+                                                                   permy = order_prev, party = party_prev, 
+                                                                   posy = parttolist(n,party_prev), 
+                                                                   base_score))
     
     # Extracting incidence matrices and log scores
     incidence_matrices <-lapply(sampled_DAGs, function(dag) dag$incidence) 
@@ -78,10 +89,14 @@ BetaOrderSampler <- function(n, iter, order_iter, order = NULL,
     
     # Log score of Proposed DAG set under the previous beta_matrix 
     #proposed_logscore <- Reduce("+", lapply(1:length(weights_proposed), function(k) incidence_logscore[[k]] * weights_proposed[k]))
-    proposed_logscore <- calculate_DAG_score(DAG_list = list(represent_DAG),permy = permy, weights = c(1), betas =  beta_prev)
+    proposed_logscore <- calculate_DAG_score(DAG_list = list(represent_DAG),permy = permy, weights = c(1) ,
+                                             betas =  beta_prev,
+                                             party = partition, posy = parttolist(n,partition)) 
     # Calculate current log score(DAG from last iteration under the new beta)
-    #current_logscore <- calculate_DAG_score(DAG_list = list(single_DAG[[i]]),permy = order_prev, weights = c(1) ,betas = weighted_betas_proposed)
-    current_logscore <- calculate_DAG_score(DAG_list = list(DAG[[i]]),permy = order_prev, weights = c(1), betas = weighted_betas_proposed)
+    #current_logscore <- calculate_DAG_score(DAG_list = list(single_DAG[[i]]),permy = order[[i]], weights = c(1) ,betas = weighted_betas_proposed)
+    current_logscore <- calculate_DAG_score(DAG_list = list(DAG[[i]]),permy = order_prev, weights = c(1) ,
+                                            betas = weighted_betas_proposed,
+                                            party = party_prev, posy = parttolist(n,party_prev))
     
     # Acceptance ratio
     ratio <-  exp(proposed_logscore - current_logscore)
@@ -92,15 +107,17 @@ BetaOrderSampler <- function(n, iter, order_iter, order = NULL,
       single_DAG[[i+1]] <- is_results$compress_dag
       weighted_betas[[i+1]] <- weighted_betas_proposed
       order[[i+1]] <- permy
+      party[[i+1]] <- partition
       count_accept[i] <- 1 # Accept 
       prev_weight <- represent_weight
-      cat("ratio:", ratio, "\n")
     }else{
       DAG[[i+1]] <- DAG[[i]]
       single_DAG[[i+1]] <- single_DAG[[i]]
       weighted_betas[[i+1]] <- weighted_betas[[i]]
       order[[i+1]] <- order[[i]]
+      party[[i+1]] <- party[[i]]
       count_accept[i] <- 0 # Reject
+      cat("ratio:", ratio, "\n")
     }
     
     if (length(DAG)-1 > burin_iter) {

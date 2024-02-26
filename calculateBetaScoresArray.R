@@ -52,52 +52,39 @@ calculateBetaScoresArray <- function(sampledDAGs, k, n) {
 
 # Input: a set of DAGs as input
 # Output : total logscores, by summing  weights times ( logscore of the DAGs under the beta_matrix )
-calculate_DAG_score <- function(DAG, permy, weights ,betas){
+calculate_DAG_score <- function(DAG_list, permy, weights ,betas, party = NULL, posy = NULL){
   sampledscore <- numeric()
-  
-  #Store the position of each element in the permutation (i.e. an inverse permutation)
-  positions <- order(permy) 
-  
-  for (dagIndex in seq_along(DAG)) {
-    incidence <- DAG[[dagIndex]]
+  for (dagIndex in seq_along(DAG_list)) {
+    incidence <- DAG_list[[dagIndex]]
     sampledscore[dagIndex] <- base_score
     
     for (child in 1:n){
-      if(positions[child]==n){ # no parents are allowed
-      } else {
-        #Nodes that are allowed to be its parents
-        parentnodes <- permy[c((positions[child]+1):n)]
-        
-        for (parent in parentnodes){
-          sampledscore[dagIndex] <- sampledscore[dagIndex] + betas[parent, child]*incidence[parent, child]                      
+      #Store the position of each element in the permutation (i.e. an inverse permutation)
+      positions <- order(permy)
+      
+      if(!is.null(party) && !is.null(posy)){.  #partitionMCMC
+        partyelement<-posy[positions[child]]
+        if(partyelement==length(party)){# no parents are allowed
+        }else{
+          parentnodes<-permy[which(posy > partyelement)]
+          for (parent in parentnodes){
+            sampledscore[dagIndex] <- sampledscore[dagIndex] + betas[parent, child]*incidence[parent, child]                      
+          }
+        }
+      }else{                                    #orderMCMC
+        if(positions[child]==n){ # no parents are allowed
+        } else {
+          #Nodes that are allowed to be its parents
+          parentnodes <- permy[c((positions[child]+1):n)]
+          for (parent in parentnodes){
+            sampledscore[dagIndex] <- sampledscore[dagIndex] + betas[parent, child]*incidence[parent, child]                      
+          }
         }
       }
     }
-  } 
+  }
   
   logscore <- sum(sampledscore*weights)
   return(logscore)
 }
 
-# Input: a set of DAGs as input
-# Output : total logscores, by summing  weights times ( logscore of the DAGs under the beta_matrix )
-calculate_singleDAG_score <- function(DAG,permy,betas){
-  sampledscore <- numeric()
-    incidence <- DAG
-    sampledscore <- base_score
-    positions <- order(permy) 
-    
-    for (child in 1:n){
-      if(positions[child]==n){ # no parents are allowed
-      } else {
-        #Nodes that are allowed to be its parents
-        parentnodes <- permy[c((positions[child]+1):n)]
-        
-        for (parent in parentnodes){
-          sampledscore <- sampledscore + betas[parent, child]*incidence[parent, child]                      
-        }
-      }
-    }
-
-  return(sampledscore)
-}
