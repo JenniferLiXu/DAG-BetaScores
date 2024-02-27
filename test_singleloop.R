@@ -30,11 +30,6 @@ source('./BetaOrderSampler.R') #our method
 # Example: Generating a random dataset
 set.seed(123)
 
-# First choose the MCMC scheme
-MCMCtype<-4 # 1 means standard structure, 2 with new edge reversal
-# 3 means order MCMC, 4 means partition MCMC
-# 5 means partition MCMC with new edge reversal
-
 n <- 7 # Define the number of nodes
 scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:100,1:n])
 #itfit<-learnBN(scoreParam,algorithm="orderIter")
@@ -44,6 +39,12 @@ scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:100,1:n])
 # In skeleton space
 samplefit<-sampleBN(scoreParam, "order")
 edgesposterior<-edgep(samplefit, pdag=FALSE, burnin=0.2)
+
+# First choose the MCMC scheme
+MCMCtype<-4 # 1 means standard structure, 2 with new edge reversal
+# 3 means order MCMC, 4 means partition MCMC
+# 5 means partition MCMC with new edge reversal
+
 
 switch(as.character(MCMCtype),
        "1"={ # standard structure MCMC
@@ -124,16 +125,22 @@ switch(as.character(MCMCtype),
 base_score <- 0 # Initialize the base score
 
 # Initialization Parameters
-num_iterations <- 200 # Total iterations
+num_iterations <- 500 # Total iterations
 
 # Example 
-results <- BetaOrderSampler(n = n, iter = num_iterations, order_iter = 100, 
-                            order_stepsize = 10, moveprobs = moveprobs, 
-                            edgesposterior = edgesposterior )
+switch(as.character(MCMCtype),
+       "3"={ # # order MCMC
+         results <- BetaOrderSampler(n = n, iter = num_iterations, order_iter = 100, 
+                                     order_stepsize = 10, moveprobs = moveprobs, 
+                                     edgesposterior = edgesposterior )
+       },
+       "4"={ # partition MCMC
+         results <- BetaPartitionSampler(n = n, iter = num_iterations, party_iter = 100, 
+                                         party_stepsize = 10, moveprobs = moveprobs, 
+                                         edgesposterior = edgesposterior )
+       }
+       )
 
-results <- BetaPartitionSampler(n = n, iter = num_iterations, order_iter = 100, 
-                     order_stepsize = 10, moveprobs = moveprobs, 
-                     edgesposterior = edgesposterior )
 
 sum(results$acceptCount)
 

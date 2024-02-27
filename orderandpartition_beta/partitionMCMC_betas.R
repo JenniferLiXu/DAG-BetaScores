@@ -13,7 +13,6 @@ partitionMCMC_betas<-function(n,startpermy,startparty,iterations,stepsave,betas,
   
   currentpermy<-startpermy #starting permutation
   currentparty<-startparty #starting partition
-  print(currentparty)
   currentposy<-parttolist(n,currentparty) #create a list of which nodes are in which partition element
   
   currentpartitionscores<-partitionscore(n,c(1:n),betas,currentpermy,currentparty,currentposy) #starting score of all DAGs compatible with the starting permutation and partition

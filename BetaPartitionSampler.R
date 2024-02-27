@@ -13,8 +13,8 @@
 # iter = 10
 # order_iter = 100
 # order_stepsize = 10
-BetaPartitionSampler <- function(n, iter, order_iter, order = NULL, party = NULL,
-                             order_stepsize, moveprobs, base_score = 0, 
+BetaPartitionSampler <- function(n, iter, party_iter, order = NULL, party = NULL,
+                             party_stepsize, moveprobs, base_score = 0, 
                              starting_dag = NULL, betas_init = NULL, skeleton = FALSE,
                              edgesposterior, burnin = 0.2 ) {
   # Initialize starting DAG if not provided
@@ -64,8 +64,8 @@ BetaPartitionSampler <- function(n, iter, order_iter, order = NULL, party = NULL
 
     #  Sample 30 DAGs using the last sampled order from PartitionMCMC
     sampled_DAGs <- lapply(1:30, function(x) samplescore_partition(n, betas = beta_prev, 
-                                                                   permy = order_prev, party = party_prev, 
-                                                                   posy = parttolist(n,party_prev), 
+                                                                   permy = permy, party = partition, 
+                                                                   posy = parttolist(n,partition), 
                                                                    base_score))
     
     # Extracting incidence matrices and log scores
@@ -88,15 +88,15 @@ BetaPartitionSampler <- function(n, iter, order_iter, order = NULL, party = NULL
                                                   function(k) beta_values[,,k] * weights_proposed[k]))
     
     # Log score of Proposed DAG set under the previous beta_matrix 
-    #proposed_logscore <- Reduce("+", lapply(1:length(weights_proposed), function(k) incidence_logscore[[k]] * weights_proposed[k]))
-    proposed_logscore <- calculate_DAG_score(DAG_list = list(represent_DAG),permy = permy, weights = c(1) ,
-                                             betas =  beta_prev,
-                                             party = partition, posy = parttolist(n,partition)) 
+    proposed_logscore <- Reduce("+", lapply(1:length(weights_proposed), function(k) incidence_logscore[[k]] * weights_proposed[k]))
+    #proposed_logscore <- calculate_DAG_score(DAG_list = list(represent_DAG),permy = permy, weights = c(1) ,
+    #                                         betas =  beta_prev,
+    #                                         party = partition, posy = parttolist(n,partition)) 
     # Calculate current log score(DAG from last iteration under the new beta)
-    #current_logscore <- calculate_DAG_score(DAG_list = list(single_DAG[[i]]),permy = order[[i]], weights = c(1) ,betas = weighted_betas_proposed)
-    current_logscore <- calculate_DAG_score(DAG_list = list(DAG[[i]]),permy = order_prev, weights = c(1) ,
-                                            betas = weighted_betas_proposed,
-                                            party = party_prev, posy = parttolist(n,party_prev))
+    current_logscore <- calculate_DAG_score(DAG_list = list(single_DAG[[i]]),permy = order[[i]], weights = c(1) ,betas = weighted_betas_proposed)
+    #current_logscore <- calculate_DAG_score(DAG_list = list(DAG[[i]]), permy = order_prev, weights = c(1) ,
+    #                                        betas = weighted_betas_proposed,
+    #                                        party = party_prev, posy = parttolist(n,party_prev))
     
     # Acceptance ratio
     ratio <-  exp(proposed_logscore - current_logscore)
@@ -109,7 +109,6 @@ BetaPartitionSampler <- function(n, iter, order_iter, order = NULL, party = NULL
       order[[i+1]] <- permy
       party[[i+1]] <- partition
       count_accept[i] <- 1 # Accept 
-      prev_weight <- represent_weight
     }else{
       DAG[[i+1]] <- DAG[[i]]
       single_DAG[[i+1]] <- single_DAG[[i]]
@@ -120,12 +119,12 @@ BetaPartitionSampler <- function(n, iter, order_iter, order = NULL, party = NULL
       cat("ratio:", ratio, "\n")
     }
     
-    if (length(DAG)-1 > burin_iter) {
-      total_DAG <- total_DAG + DAG[[i+1]]
+    if (length(single_DAG)-1 > burin_iter) {
+      total_DAG <- total_DAG + single_DAG[[i+1]]
       current_mat <- total_DAG/(i - burin_iter) # Average the edges of DAGs after burn in part
       diff_mat <- CompareDAG(current_mat, edgesposterior)
     }else{
-      sum_matrix <- Reduce("+", DAG[1:length(DAG)])
+      sum_matrix <- Reduce("+", single_DAG[1:length(single_DAG)])
       current_mat <- sum_matrix/i
       diff_mat <- CompareDAG(current_mat, edgesposterior)
     }
@@ -145,4 +144,4 @@ BetaPartitionSampler <- function(n, iter, order_iter, order = NULL, party = NULL
               acceptCount = count_accept[-c(1:burin_iter)], 
               diffBiDAGs = diff_BiDAGs[-c(1:burin_iter)]))
 }
-
+ 

@@ -55,7 +55,7 @@ BetaOrderSampler <- function(n, iter, order_iter, order = NULL,
     permy <- unlist(example[[4]][length(example[[4]])])
     
     #  Sample 30 DAGs using the last sampled order from OrderMCMC
-    sampled_DAGs <- lapply(1:30, function(x) samplescore(n, beta_prev, permy, base_score))
+    sampled_DAGs <- lapply(1:10, function(x) samplescore(n, beta_prev, permy, base_score))
     
     # Extracting incidence matrices and log scores
     incidence_matrices <-lapply(sampled_DAGs, function(dag) dag$incidence) 
@@ -80,7 +80,7 @@ BetaOrderSampler <- function(n, iter, order_iter, order = NULL,
     #proposed_logscore <- Reduce("+", lapply(1:length(weights_proposed), function(k) incidence_logscore[[k]] * weights_proposed[k]))
     proposed_logscore <- calculate_DAG_score(DAG_list = list(represent_DAG),permy = permy, weights = c(1), betas =  beta_prev)
     # Calculate current log score(DAG from last iteration under the new beta)
-    #current_logscore <- calculate_DAG_score(DAG_list = list(single_DAG[[i]]),permy = order_prev, weights = c(1) ,betas = weighted_betas_proposed)
+    #current_logs3core <- calculate_DAG_score(DAG_list = list(single_DAG[[i]]),permy = order_prev, weights = c(1) ,betas = weighted_betas_proposed)
     current_logscore <- calculate_DAG_score(DAG_list = list(DAG[[i]]),permy = order_prev, weights = c(1), betas = weighted_betas_proposed)
     
     # Acceptance ratio
@@ -103,12 +103,12 @@ BetaOrderSampler <- function(n, iter, order_iter, order = NULL,
       count_accept[i] <- 0 # Reject
     }
     
-    if (length(DAG)-1 > burin_iter) {
-      total_DAG <- total_DAG + DAG[[i+1]]
+    if (length(single_DAG)-1 > burin_iter) {
+      total_DAG <- total_DAG + single_DAG[[i+1]]
       current_mat <- total_DAG/(i - burin_iter) # Average the edges of DAGs after burn in part
       diff_mat <- CompareDAG(current_mat, edgesposterior)
     }else{
-      sum_matrix <- Reduce("+", DAG[1:length(DAG)])
+      sum_matrix <- Reduce("+", single_DAG[1:length(single_DAG)])
       current_mat <- sum_matrix/i
       diff_mat <- CompareDAG(current_mat, edgesposterior)
     }
