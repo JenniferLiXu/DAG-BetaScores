@@ -46,54 +46,51 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
   edge_over_time <- array(0, dim = c(n, n, iter))
   edge_diff_over_time <- array(0, dim = c(n, n, iter))
   prev_weight <- 1
-
+  
   
   # Looping through iterations
   for (i in 1:iter) {
     beta_prev <- weighted_betas[[i]]
     order_prev <- order[[i]]
     
-    starttime<-proc.time() # for timing the problem
+    starttime_order<-proc.time() # for timing the problem
     
     # Sampling orders with OrderMCMC
     example <- orderMCMC_betas(n,startorder = order_prev ,iterations = order_iter, 
                                betas = beta_prev,
                                stepsave = order_stepsize, moveprobs) # run the Order MCMC code
     
-    endtime<-proc.time()
-    endtime<-endtime-starttime
-    #cat("time for order MCMC:", endtime, "\n")
+    endtime_order<-proc.time()
+    endtime_order<-endtime_order-starttime_order
     
     #Store the last order from the chain
     permy <- unlist(example[[4]][length(example[[4]])])
     orderscore_prev <- unlist(example[[3]][length(example[[3]])])
     
-    starttime<-proc.time() # for timing the problem
+    starttime_DAGs<-proc.time() # for timing the problem
     
     #  Sample 10 DAGs using the last sampled order from OrderMCMC
     sampled_DAGs <- lapply(1:30, function(x) samplescore(n, beta_prev, permy, base_score))
     
-    endtime<-proc.time()
-    endtime<-endtime-starttime
-    #cat("time for Sample 10 DAGs:", endtime, "\n")
+    endtime_DAGs<-proc.time()
+    endtime_DAGs<-endtime_DAGs-starttime_DAGs
     
     # Extracting incidence matrices and log scores
     incidence_matrices <-lapply(sampled_DAGs, function(dag) dag$incidence) 
     incidence_logscore<-lapply(sampled_DAGs, function(dag) dag$logscore) 
     
     
-    starttime<-proc.time() # for timing the problem
+    starttime_is<-proc.time() # for timing the problem
     
     # Update beta matrix using importance sampling
     is_results <- importance_DAG(DAGs = incidence_matrices, score_under_betas = incidence_logscore)
     weights_proposed <- is_results$importance_weights
     ess_DAGs[i] <-is_results$ess_value
     
-    endtime<-proc.time()
-    endtime<-endtime-starttime
-    #cat("time for importance sampling", endtime, "\n")
-    
-    starttime<-proc.time() # for timing the problem
+    endtime_is<-proc.time()
+    endtime_is<-endtime_is-starttime_is
+   
+    starttime_beta<-proc.time() # for timing the problem
     
     # Sample one DAG from our sampled DAGs, using normalised weights as the probability
     represent_sample <- sample(c(1:length(sampled_DAGs)),size = 1, prob = weights_proposed)
@@ -105,14 +102,15 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
     weighted_betas_proposed <- Reduce("+", lapply(1:length(weights_proposed), 
                                                   function(k) beta_values[,,k] * weights_proposed[k]))
     
-    endtime<-proc.time()
-    endtime<-endtime-starttime
-    #cat("time for Beta matrix:", endtime, "\n")
+    endtime_beta<-proc.time()
+    endtime_beta<-endtime_beta-starttime_beta
+    #cat("time for order MCMC:",endtime_order, ",DAGs",endtime_DAGs, ",IS" ,endtime_is, ",beta",endtime_beta, "\n")
+    
     orderscore_prop <- sum(orderscore_betas(n,c(1:n), weighted_betas_proposed, order_prev))
     
     # Log score of Proposed DAG set under the previous beta_matrix 
-    proposed_logscore <- Reduce("+", lapply(1:length(weights_proposed), function(k) incidence_logscore[[k]] * weights_proposed[k]))
-    #proposed_logscore <- calculate_DAG_score(DAG_list = list(represent_DAG),permy = permy, weights = c(1), betas =  beta_prev)
+    #proposed_logscore <- Reduce("+", lapply(1:length(weights_proposed), function(k) incidence_logscore[[k]] * weights_proposed[k]))
+    proposed_logscore <- calculate_DAG_score(DAG_list = list(represent_DAG),permy = permy, weights = c(1), betas =  beta_prev)
     # Calculate current log score(DAG from last iteration under the new beta)
     current_logscore <- calculate_DAG_score(DAG_list = list(single_DAG[[i]]),permy = order_prev, weights = c(1) ,betas = weighted_betas_proposed)
     #current_logscore <- calculate_DAG_score(DAG_list = list(DAG[[i]]),permy = order_prev, weights = c(1), betas = weighted_betas_proposed)
@@ -128,7 +126,7 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
       order[[i+1]] <- permy
       count_accept[i] <- 1 # Accept 
       prev_weight <- represent_weight
-      cat("ratio:", ratio, "\n")
+      #cat("ratio:", ratio, "\n")
     }else{
       DAG[[i+1]] <- DAG[[i]]
       single_DAG[[i+1]] <- single_DAG[[i]]
@@ -136,8 +134,6 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
       order[[i+1]] <- order[[i]]
       count_accept[i] <- 0 # Reject
     }
-    
-    
     
     if (length(DAG)-1 > burin_iter) {
       total_DAG <- total_DAG + DAG[[i+1]]
@@ -165,4 +161,3 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
               betas = weighted_betas[[iter+1]],
               diffBiDAGs = diff_BiDAGs[-c(1:burin_iter)]))
 }
-

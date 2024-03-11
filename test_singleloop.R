@@ -1,15 +1,17 @@
 #Creating a small DAG model in R to 
 #test the proposed method for obtaining beta values
 
-install.packages("bnlearn")
-install.packages("BiDAG")
-install.packages("pcalg")
-install.packages("igraph") 
+#install.packages("bnlearn")
+# install.packages("BiDAG")
+# install.packages("pcalg")
+# install.packages("igraph") 
 
+.libPaths("/cluster/home/xuwli/R/x86_64-pc-linux-gnu-library/4.3") 
 library(BiDAG) 
 library(pcalg)
 library(igraph)
 library(bnlearn)
+library(ggplot2)
 
 # load the necessary functions
 #source('./edgerevandstructure/newedgerevfns.R')
@@ -24,7 +26,7 @@ source('./orderandpartition_beta/samplefns_party-beta.R')
 
 source('./importance_sampling_beta.R')
 source('./calculateBetaScoresArray.R')
-source('./CompareDAG_skeleton.R')
+source('./compareDAG_skeleton.R')
 source('./BetaOrderSampler.R') #our method
 
 # Example: Generating a random dataset
@@ -126,6 +128,8 @@ base_score <- 0 # Initialize the base score
 num_iterations <- 1e4# Total iterations
 
 # Example 
+starttime_model<-proc.time() 
+
 switch(as.character(MCMCtype),
        "3"={ # # order MCMC
          set.seed(123)
@@ -144,47 +148,67 @@ switch(as.character(MCMCtype),
        }
        )
 
+endtime_model<-proc.time()
+endtime_model<-endtime_model-starttime_model
+print(endtime_model)
 
-sum(results_seed123$acceptCount)
+# num_iterations <- 1e4 
+# user   system  elapsed 
+# 1307.209    5.505 1319.328 (calculateBetaScoresArray)
+# 3203.751   14.605 5618.640 (calculateBetaScoresArray_hash) .---might not true
+
+# num_iterations <- 1e3 
+# user  system elapsed 
+#  143.562   0.833 147.043 (calculateBetaScoresArray)
+#  281.002   1.618 285.713 (calculateBetaScoresArray_hash)
+#  293.758   2.730 302.632 (calculateBetaScoresArray_hash_short)
+
+# num_iterations <- 1e2 
+# user  system elapsed 
+# 14.725   0.132  15.660  (calculateBetaScoresArray)
+# 27.838   0.155  28.907  (calculateBetaScoresArray_hash)
+#  28.316   0.157  28.884 (calculateBetaScoresArray_hash_short)
 
 
-########## Plotting the differences between our matrix and the one from BiDAG
-plot(#differences[-c(1:3)],  
-  results_seed123$diffBiDAGs[seq(1, length(results_seed123$diffBiDAGs), by = 1)],
-  #diff_BiDAGs[seq(5, length(diff_BiDAGs), by = 5)], 
-  col = "blue",
-  type = "b", main = "Differences between Matrices Per Iteration", 
-  xlab = "Iteration", ylab = "Difference")
+# sum(results_seed123$acceptCount)
 
-
-plot(NULL, xlim = c(1, length(results_seed123$diffBiDAGs)), ylim = c(0, 1),  # Adjust ylim based on actual range of your data if needed
-     xlab = 'Iteration', ylab = 'Edge Probability', 
-     main = 'Edge Probability Over Iterations')
-
-# Generate enough colors for all edges, considering a fully connected directed graph without self-loops
-colors <- rainbow(n * (n - 1))
-legend_labels <- vector("character", length = n * (n - 1))
-color_index <- 1
-
-# Plotting each edge over time, skipping diagonals
-for (row in 1:n) {
-  for (col in 1:n) {
-    if (row != col) {  # Skip diagonals
-      lines(seq(1, length(results_seed123$diffBiDAGs), by = 1), 
-            results_seed123$edge_prob[row, col, seq(1, length(results_seed123$diffBiDAGs), by = 1)], 
-            col = colors[color_index], type = 'l')
-      legend_labels[color_index] <- paste('Edge', row, '->', col)
-      color_index <- color_index + 1
-    }
-  }
-}
-
-# Adding legend
-# Note: Displaying a legend for a large number of edges might not be practical
-# Consider using a subset or interactive plotting for detailed inspection
-if (color_index <= 200) {  # Arbitrary threshold to avoid clutter
-  legend("topright", legend = legend_labels, col = colors, lty = 1, cex = 0.5)
-}
+# ########## Plotting the differences between our matrix and the one from BiDAG
+# plot(#differences[-c(1:3)],  
+#   results_seed123$diffBiDAGs[seq(1, length(results_seed123$diffBiDAGs), by = 1)],
+#   #diff_BiDAGs[seq(5, length(diff_BiDAGs), by = 5)], 
+#   col = "blue",
+#   type = "b", main = "Differences between Matrices Per Iteration", 
+#   xlab = "Iteration", ylab = "Difference")
+# 
+# 
+# plot(NULL, xlim = c(1, length(results_seed123$diffBiDAGs)), ylim = c(0, 1),  # Adjust ylim based on actual range of your data if needed
+#      xlab = 'Iteration', ylab = 'Edge Probability', 
+#      main = 'Edge Probability Over Iterations')
+# 
+# # Generate enough colors for all edges, considering a fully connected directed graph without self-loops
+# colors <- rainbow(n * (n - 1))
+# legend_labels <- vector("character", length = n * (n - 1))
+# color_index <- 1
+# 
+# # Plotting each edge over time, skipping diagonals
+# for (row in 1:n) {
+#   for (col in 1:n) {
+#     if (row != col) {  # Skip diagonals
+#       lines(seq(1, length(results_seed123$diffBiDAGs), by = 1), 
+#             results_seed123$edge_prob[row, col, seq(1, length(results_seed123$diffBiDAGs), by = 1)], 
+#             col = colors[color_index], type = 'l')
+#       legend_labels[color_index] <- paste('Edge', row, '->', col)
+#       color_index <- color_index + 1
+#     }
+#   }
+# }
+# 
+# # Adding legend
+# # Note: Displaying a legend for a large number of edges might not be practical
+# # Consider using a subset or interactive plotting for detailed inspection
+# if (color_index <= 200) {  # Arbitrary threshold to avoid clutter
+#   legend("topright", legend = legend_labels, col = colors, lty = 1, cex = 0.5)
+# }
 
 
 starting_mat <- matrix(1, nrow = n, ncol = n)
@@ -203,20 +227,23 @@ plotpedges(orderfitBoston123, cutoff = 0, pdag=FALSE)
 pedges <-  list()
 pedges[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
 pedges[[2]] <- edgep(orderfitBoston123, pdag=FALSE)
-plot_order_betaOrder <- plotpcor(pedges, xlab="run1", ylab="run2",printedges=TRUE)
+pdf("plot_order_betaOrder_plot_10000_0311.pdf")
+plot_order_Order <- plotpcor(pedges, xlab="run1", ylab="run2",printedges=TRUE, main = paste("Iteration", num_iterations) )
+cat("order_Order: ",plot_order_Order$MSE, plot_order_Order$R2 , "\n")
 
 pedges_comp <-  list()
 pedges_comp[[1]] <-  edgep(orderfitBoston123, pdag=FALSE)
 pedges_comp[[2]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
 plot_order_betaOrder <- plotpcor(pedges_comp, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. OrderMCMC and BetaSampler")
-
+cat("order_betaOrder: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
 
 pedges_seed <-  list()
-pedges_seed[[1]] <- results_seed1_1$edge_prob[,,length(results_seed1_1$edge_prob[1,1,])]
-pedges_seed[[2]] <- results_seed2_1$edge_prob[,,length(results_seed2_1$edge_prob[1,1,])]
+pedges_seed[[1]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
+pedges_seed[[2]] <- results_seed100$edge_prob[,,length(results_seed100$edge_prob[1,1,])]
 plot_order_betaOrder_seed <- plotpcor(pedges_seed, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. BetaSamplers")
+cat("order_betaOrder_seed: ",plot_order_betaOrder_seed$MSE, plot_order_betaOrder_seed$R2 , "\n")
 
-
+#dev.off()
 
 ########### Graphing part ############
 
