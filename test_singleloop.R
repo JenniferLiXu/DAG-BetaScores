@@ -155,13 +155,13 @@ print(endtime_model)
 # num_iterations <- 1e4 
 # user   system  elapsed 
 # 1307.209    5.505 1319.328 (calculateBetaScoresArray)
-# 3203.751   14.605 5618.640 (calculateBetaScoresArray_hash) .---might not true
+# 767.520   8.882 786.310    (calculateBetaScoresArray_hash)
 
 # num_iterations <- 1e3 
 # user  system elapsed 
 #  143.562   0.833 147.043 (calculateBetaScoresArray)
-#  281.002   1.618 285.713 (calculateBetaScoresArray_hash)
-#  293.758   2.730 302.632 (calculateBetaScoresArray_hash_short)
+#  72.534   0.695  72.791 (calculateBetaScoresArray_hash)
+#   (calculateBetaScoresArray_hash_short)
 
 # num_iterations <- 1e2 
 # user  system elapsed 
@@ -223,11 +223,11 @@ plotpedges(orderfitBoston123, cutoff = 0, pdag=FALSE)
 
 # Also compare with partition MCMC
 
-#results_seed1 and 2 for 10000 iterration
+#results_seed1 and 2 for 1e5 iterration
 pedges <-  list()
 pedges[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
 pedges[[2]] <- edgep(orderfitBoston123, pdag=FALSE)
-pdf("plot_order_betaOrder_plot_10000_0311.pdf")
+pdf("plot_order_betaOrder_plot_hash_1e4.pdf")
 plot_order_Order <- plotpcor(pedges, xlab="run1", ylab="run2",printedges=TRUE, main = paste("Iteration", num_iterations) )
 cat("order_Order: ",plot_order_Order$MSE, plot_order_Order$R2 , "\n")
 
@@ -243,7 +243,7 @@ pedges_seed[[2]] <- results_seed100$edge_prob[,,length(results_seed100$edge_prob
 plot_order_betaOrder_seed <- plotpcor(pedges_seed, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. BetaSamplers")
 cat("order_betaOrder_seed: ",plot_order_betaOrder_seed$MSE, plot_order_betaOrder_seed$R2 , "\n")
 
-#dev.off()
+dev.off()
 
 ########### Graphing part ############
 

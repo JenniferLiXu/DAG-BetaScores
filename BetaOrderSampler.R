@@ -19,13 +19,16 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
                              order_stepsize, moveprobs, base_score = 0, 
                              starting_dag = NULL, betas_init = NULL, skeleton = FALSE,
                              edgesposterior, burnin = 0.2 ) {
+  count_DAGcores <- c()
   # Initialize starting DAG if not provided
   if (is.null(starting_dag)) {
     starting_dag <- list(matrix(0, nrow = n, ncol = n))
   }
   # Initialize beta matrix
   if (is.null(betas_init)) {
-    betas_init <- calculateBetaScoresArray(starting_dag, k = 1, n)[,,1]
+    calcultion_betas_init <- calculateBetaScoresArray_hash(starting_dag, k = 1, n)
+    betas_init <- calcultion_betas_init$allBetaScores[,,1]
+    count_DAGcores <- c(count_DAGcores, calcultion_betas_init$count_DAGcore)
   }
   # Initialize order
   if (is.null(order)) {
@@ -98,7 +101,10 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
     represent_weight <- weights_proposed[represent_sample]
     
     # Update beta matrix using the weights from sampled DAGs
-    beta_values <- calculateBetaScoresArray(incidence_matrices, k = length(incidence_matrices) ,n) 
+    calculation_beta_values <- calculateBetaScoresArray_hash(incidence_matrices, k = length(incidence_matrices) ,n)
+    beta_values <- calculation_beta_values$allBetaScores
+    count_DAGcores <- c(count_DAGcores, calculation_beta_values$count_DAGcore)
+    print(calculation_beta_values$count_DAGcore)
     weighted_betas_proposed <- Reduce("+", lapply(1:length(weights_proposed), 
                                                   function(k) beta_values[,,k] * weights_proposed[k]))
     
@@ -159,5 +165,6 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
               essValues = ess_DAGs[-c(1:burin_iter)], 
               acceptCount = count_accept[-c(1:burin_iter)], 
               betas = weighted_betas[[iter+1]],
-              diffBiDAGs = diff_BiDAGs[-c(1:burin_iter)]))
+              diffBiDAGs = diff_BiDAGs[-c(1:burin_iter)],
+              count_DAGcores = count_DAGcores))
 }
