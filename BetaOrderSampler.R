@@ -111,11 +111,11 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
     
     # Acceptance ratio
     # Test
-    wA <- is_results$log_diff/nr_sample
-    inv_wB <- sum(oDAGnBeta_logscore - totalscore_of_DAGs_prev)/nr_sample
+    # wA <- is_results$log_diff/nr_sample
+    # inv_wB <- sum(oDAGnBeta_logscore - totalscore_of_DAGs_prev)/nr_sample
     
-    # wA <-  (totalscore_DAGs - nDAGoBeta_logscore)/nr_sample
-    # inv_wB <- (sum(oDAGnBeta_logscore) - sum(totalscore_of_DAGs_prev))/nr_sample
+    wA <-  (totalscore_DAGs - nDAGoBeta_logscore)/nr_sample
+    inv_wB <- (sum(oDAGnBeta_logscore) - sum(totalscore_of_DAGs_prev))/nr_sample
     ratio <- exp(wA + inv_wB)
     # cat("ratio",ratio,"totalscore_DAGs",totalscore_DAGs, "totalscore_of_DAGs_prev", totalscore_of_DAGs_prev, "\n")
     # Test

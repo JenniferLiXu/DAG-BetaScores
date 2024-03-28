@@ -123,7 +123,7 @@ switch(as.character(MCMCtype),
 base_score <- 0 # Initialize the base score
 
 # Initialization Parameters
-num_iterations <- 1e3# Total iterations
+num_iterations <- 2e2# Total iterations
 
 # Example 
 starttime_model<-proc.time() 
