@@ -1,8 +1,15 @@
 
 # This function gives the sum of scores compatible with a given partition
+# n
+# scorenodes <- c(1:n)
+# betas <- weighted_betas_proposed
+# permy <- order_prev
+# party <- partition
 
-partitionscore<-function(n,scorenodes,betas,permy,party,posy){
-  
+partitionscore<-function(n,scorenodes,betas,permy,party,posy = NULL){
+  if(is.null(posy)){
+    posy <- parttolist(n,party)
+  }
   nodescores<- rep(0,n)
   m<-length(party)
   

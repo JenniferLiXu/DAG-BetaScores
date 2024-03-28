@@ -44,7 +44,7 @@ MCMCtype<-3 # 1 means standard structure, 2 with new edge reversal
 # 3 means order MCMC, 4 means partition MCMC
 # 5 means partition MCMC with new edge reversal
 
- 
+
 switch(as.character(MCMCtype),
        "1"={ # standard structure MCMC
          iterations<-100 #number of iterations in the chain
@@ -123,7 +123,7 @@ switch(as.character(MCMCtype),
 base_score <- 0 # Initialize the base score
 
 # Initialization Parameters
-num_iterations <- 1e3# Total iterations
+num_iterations <- 1e5# Total iterations
 
 # Example 
 starttime_model<-proc.time() 
@@ -155,18 +155,23 @@ endtime_model<-proc.time()
 endtime_model<-endtime_model-starttime_model
 print(endtime_model)
 
-sum(results_seed123$acceptCount)/num_iterations
-# num_iterations <- 1e4 
+cat("accept ratio(seed 123): ", sum(results_seed123$acceptCount)/num_iterations , "\n")
+cat("accept ratio(seed 100)",sum(results_seed100$acceptCount)/num_iterations , "\n")
+
+# num_iterations <- 1e4 (10 sample DAGs)
 # user   system  elapsed 
 # 1307.209    5.505 1319.328 (calculateBetaScoresArray)
 # 767.520   8.882 786.310    (calculateBetaScoresArray_hash)
 
-# num_iterations <- 1e3 
+# num_iterations <- 1e3 (10 sample DAGs)
 # user  system elapsed 
 #  143.562   0.833 147.043 (calculateBetaScoresArray)
 #  72.534   0.695  72.791 (calculateBetaScoresArray_hash)
 #  33.980   0.408  35.066  (calculateBetaScoresArray_hash new version)
 
+# num_iterations <- 1e3 (100 sample DAGs)
+# user  system elapsed 
+#
 
 # ########## Plotting the differences between our matrix and the one from BiDAG
 # plot(#differences[-c(1:3)],  
@@ -223,7 +228,7 @@ plotpedges(orderfitBoston123, cutoff = 0, pdag=FALSE)
 pedges <-  list()
 pedges[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
 pedges[[2]] <- edgep(orderfitBoston123, pdag=FALSE)
-pdf("0328plot_order_betaOrder_1e4.pdf")
+pdf("0320plot_order_betaOrder_1e5_12(100sDAG).pdf")
 plot_order_Order <- plotpcor(pedges, xlab="run1", ylab="run2",printedges=TRUE, main = paste("Iteration", num_iterations) )
 cat("order_Order: ",plot_order_Order$MSE, plot_order_Order$R2 , "\n")
 
@@ -238,7 +243,6 @@ pedges_seed <-  list()
 pedges_seed[[1]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
 pedges_seed[[2]] <- results_seed100$edge_prob[,,length(results_seed100$edge_prob[1,1,])]
 dimnames(pedges_seed[[1]]) <- dimnames(pedges_comp[[1]])
-dimnames(pedges_seed[[2]]) <- dimnames(pedges_comp[[1]])
 plot_order_betaOrder_seed <- plotpcor(pedges_seed, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. BetaSamplers")
 cat("order_betaOrder_seed: ",plot_order_betaOrder_seed$MSE, plot_order_betaOrder_seed$R2 , "\n")
 
