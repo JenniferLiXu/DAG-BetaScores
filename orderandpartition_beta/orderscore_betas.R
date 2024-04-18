@@ -9,7 +9,6 @@
 #betas is a 2D array [parent, child] 
 orderscore_betas <- function(n,scorenodes, betas, permy) {
   nodescores<- rep(0,n)
-  
   #Store the position of each element in the permutation (i.e. an inverse permutation)
   positions <- order(permy) 
   

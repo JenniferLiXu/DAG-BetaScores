@@ -5,10 +5,10 @@ propersample <- function(x){if(length(x)==1) x else sample(x,1)}
 
 # This function samples a single DAG score according to a list of possible betas
 
-samplescore<-function(n, betas, permy, base_score){
+samplescore<-function(n, betas, permy){
   
   incidence<-matrix(numeric(n*n),nrow=n) # store the adjacency matrix
-  sampledscore<- base_score
+  sampledscore<- 0
   #Store the position of each element in the permutation (i.e. an inverse permutation)
   positions <- order(permy) 
   

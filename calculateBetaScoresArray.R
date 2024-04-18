@@ -1,18 +1,11 @@
 #This Document contains the following functions:
-
 #calculate_DAG_score
 #calculateBetaScoresArray_hash
 #importance_DAG
 
-#This function calculate beta for each possible parent node (e.g., node 2) 
-#in relation to the child node (e.g., node 1) as follows
-
-#Beta for a parent node j : 
-#beta[j,i] = (score of i with parents j and x, y, z) - (score of i with parents x, y, z)
-
 # Input: a set of DAGs as input
-# Output : total logscores, by summing  weights times ( logscore of the DAGs under the beta_matrix )
-calculate_DAG_score <- function(DAG_list, permy, weights ,betas, party = NULL, posy = NULL){
+# Output : logscores of the DAGs in the set with given beta
+calculate_DAG_score <- function(DAG_list, permy, weights ,betas, base_score, party = NULL, posy = NULL){
   sampledscore <- numeric()
   for (dagIndex in seq_along(DAG_list)) {
     incidence <- DAG_list[[dagIndex]]
@@ -53,7 +46,7 @@ calculate_DAG_score <- function(DAG_list, permy, weights ,betas, party = NULL, p
 
 ####### Hash Tables ########
 # Initialize two environments as hash tables
-parentSetBetaCache <- new.env(hash = TRUE, parent = emptyenv())
+parentSetBetaCache <- new.env(hash = TRUE, parent = emptyenv()) 
 individualParentBetaCache <- new.env(hash = TRUE, parent = emptyenv()) # Column of Beta values for each individual parents on the child node
 
 # Generate a unique key for each parent set and child node combination
@@ -61,7 +54,6 @@ generateKey <- function(childNode, parentSet) {
   # Sort parentSet to ensure consistency, then concatenate with childNode
   paste0(childNode, "-", toString(sort(parentSet)))
 }
-
 
 # Check if a key exists and return the stored value if it does
 getStoredValue <- function(hashTable, key) {
@@ -77,34 +69,31 @@ storeValue <- function(env, key, value) {
   env[[key]] <- value
 }
 
+#Beta for a parent node j : 
+#beta[j,i] = (score of i with parents j, x, y, z) - (score of i with parents x, y, z)
+
 # Compute the column of beta values for a child node given its current parent set
 computeAndCacheBetaValues <- function(childNode, parentSet, n) {
   count_DAGcore <- 0
   # Generate key for the current parent set
-  
   parentSetKey <- generateKey(childNode, parentSet)
   
   # Attempt to retrieve pre-computed beta values for the individual parents
   betaValues <- getStoredValue(individualParentBetaCache, parentSetKey)
-  
   if (!is.null(betaValues)) {
     return(list(betaValues = betaValues[-(n+1)], count_DAGcore = count_DAGcore, DAG_parentset = betaValues[n+1])) # Cached beta values found, return them
   } else {
     # Beta values not found in cache, compute them
-    # Ensure the score for the current parent set is cached
     parentSetScore <- getStoredValue(parentSetBetaCache, parentSetKey)
     betaValues <- rep(0, times = (n + 1)) # Store the beta values(colunm) + the score of the current parent set!
     if (is.null(parentSetScore)){
       # Compute and cache the score for the current parent set
       parentSetScore <- BiDAG:::DAGcorescore(childNode, parentnodes = parentSet, scoreParam$n, scoreParam)# Compute score for childNode with parentSet
       count_DAGcore <- count_DAGcore+1
-      #print(parentSetKey)
       storeValue(parentSetBetaCache, parentSetKey, parentSetScore)
       betaValues[n+1] <- parentSetScore
     }
-
     # Compute beta values for individual parents by adding/removing them
-    
     for (parentNode in 1:n) {
       if (parentNode != childNode) {
         # Check if parentNode is actually a parent in this DAG
@@ -113,14 +102,11 @@ computeAndCacheBetaValues <- function(childNode, parentSet, n) {
           reducedParentSet <- parentSet[!parentSet == parentNode]
           reducedKey <- generateKey(childNode, reducedParentSet)
           reducedScore <- getStoredValue(parentSetBetaCache, reducedKey)
-          
           if (is.null(reducedScore)) {
             reducedScore <- BiDAG:::DAGcorescore(childNode, parentnodes = reducedParentSet, scoreParam$n, scoreParam)# Compute score for childNode with reducedParentSet
             count_DAGcore <- count_DAGcore+1
-            #print(reducedKey)
             storeValue(parentSetBetaCache, reducedKey, reducedScore)
           }
-          
           # Calculate beta value as the difference in scores
           betaValue <- parentSetScore - reducedScore
           betaValues[parentNode] <- betaValue
@@ -129,19 +115,15 @@ computeAndCacheBetaValues <- function(childNode, parentSet, n) {
           withParentNodes <-c(parentSet, parentNode)
           withParentNodesKey <- generateKey(childNode, withParentNodes)
           withParentNodesScore <- getStoredValue(parentSetBetaCache, withParentNodesKey)
-          
           if (is.null(withParentNodesScore)) {
             withParentNodesScore <- BiDAG:::DAGcorescore(childNode, parentnodes = withParentNodes, scoreParam$n, scoreParam)# Compute score for childNode with reducedParentSet
             count_DAGcore <- count_DAGcore+1
-            #print(withParentNodesKey)
             storeValue(parentSetBetaCache, withParentNodesKey, withParentNodesScore)
           }
-          
           # Calculate beta value as the difference in scores
           betaValue <- withParentNodesScore - parentSetScore
           betaValues[parentNode] <- betaValue
         }
-        
       } else {
         # Beta score is not applicable for self (node cannot be its own parent)
         betaValues[parentNode] <- 0
@@ -156,14 +138,14 @@ computeAndCacheBetaValues <- function(childNode, parentSet, n) {
  
 #This function will return a 3D array where allBetaScores[j, i, k] 
 #represents the beta score of parent node j on child node i in the k-th sampled DAG.
-calculateBetaScoresArray_hash <- function(sampledDAGs, k, n){
+calculateBetaScoresArray_hash <- function(sampledDAGs, k, n, base_score){
   count <-  0 
   # The array dimensions are [number of parents, number of children, number of sampled DAGs]
   allBetaScores <- array(NA, dim = c(n, n, k))
   incidence_scores <- numeric()
   for (dagIndex in seq_along(sampledDAGs)) {
     incidence <- sampledDAGs[[dagIndex]]
-    incidence_score <- 0
+    incidence_score <- base_score
     for (childNode in 1:n){
       # Identify the parent nodes for this child in the current DAG
       parentNodes <- which(incidence[, childNode] == 1)
@@ -171,7 +153,6 @@ calculateBetaScoresArray_hash <- function(sampledDAGs, k, n){
       column_beta <- calculation_column_beta$betaValues
       count <- count + calculation_column_beta$count_DAGcore
       incidence_score <- incidence_score + calculation_column_beta$DAG_parentset
-      
       allBetaScores[ , childNode, dagIndex] <- array(column_beta, dim = c(length(column_beta), 1, 1))
     }
     incidence_scores[dagIndex] <- incidence_score
@@ -179,29 +160,20 @@ calculateBetaScoresArray_hash <- function(sampledDAGs, k, n){
   return(list(allBetaScores = allBetaScores, count_DAGcore = count, target_DAG_score = incidence_scores))
 }
 
-# DAGs = incidence_matrices
-# score_under_betas = incidence_logscore
-# target_scores = calculation_beta_values$target_DAG_score
-
-
 #importance_DAG 
 importance_DAG <- function(DAGs, score_under_betas, target_scores){
   differ_score <- numeric()
-  
-  starttime_DAG <-proc.time()
   for (i in 1:length(DAGs)){
     differ_score[i] <- target_scores[i] - score_under_betas[[i]]
   }
-  endtime_DAG <- proc.time()
-  endtime_DAG <- endtime_DAG - starttime_DAG 
-  
   # To avoid numerical issues, subtract the max score before exponentiating
   max_score <- max(differ_score)
   importance_weights <- exp(differ_score - max_score)
-  log_diff <- sum(differ_score)
-  # importance_weights <- exp(differ_score)
-  # cat("importance_weights",importance_weights, "\n")
-  
+  # log_diff <- log(sum(importance_weights))
+  max_diff_logscore <- max(differ_score)
+  exp_diff_logscore <- sum(exp(differ_score - max_diff_logscore))
+  log_diff <- log(exp_diff_logscore) + max_logscore
+
   # Normalize the exponentiated scores to get the importance weights
   normalised_weights <- importance_weights / sum(importance_weights)
   ess_value <- 1 / sum(importance_weights^2)

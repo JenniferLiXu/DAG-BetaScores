@@ -5,6 +5,7 @@
 # install.packages("BiDAG")
 # install.packages("pcalg")
 # install.packages("igraph") 
+# install.packages("combinat")
 
 .libPaths("/cluster/home/xuwli/R/x86_64-pc-linux-gnu-library/4.3") 
 library(BiDAG) 
@@ -12,6 +13,7 @@ library(pcalg)
 library(igraph)
 library(bnlearn)
 library(ggplot2)
+library(combinat)
 
 # load the necessary functions
 #source('./edgerevandstructure/newedgerevfns.R')
@@ -27,10 +29,11 @@ source('./orderandpartition_beta/samplefns_party-beta.R')
 source('./calculateBetaScoresArray.R')
 source('./compareDAG_skeleton.R')
 source('./BetaOrderSampler.R') #our method
+source('./BetaOrderSampler_OneDAG.R') 
 
 # Example: Generating a random dataset
-n <- 7 # Define the number of nodes
-scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:100,1:n])
+n <- 4 # Define the number of nodes,
+scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:250,1:n])
 #itfit<-learnBN(scoreParam,algorithm="orderIter")
 #maxEC<-getDAG(itfit,cp=FALSE)
 
@@ -39,11 +42,53 @@ scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:100,1:n])
 samplefit<-sampleBN(scoreParam, "orderIter")
 edgesposterior<-edgep(samplefit, pdag=FALSE, burnin=0.2)
 
-# First choose the MCMC scheme
-MCMCtype<-3 # 1 means standard structure, 2 with new edge reversal
-# 3 means order MCMC, 4 means partition MCMC
-# 5 means partition MCMC with new edge reversal
+#          crim          zn      indus        chas
+# crim  0.0000000000 0.003747658 0.37539038 0.536539663
+# zn    0.0006246096 0.000000000 0.17926296 0.004372267
+# indus 0.6246096190 0.820737039 0.00000000 0.061211743
+# chas  0.1317926296 0.003123048 0.01998751 0.000000000
 
+# 2,3,1,4
+
+
+
+# Toy example
+
+# # Step 1: Generate a Synthetic Dataset
+# n <- 4 # Define the number of nodes
+# set.seed(123) # For reproducibility
+# # A → B
+# # A → C
+# # B → D
+# # C → D
+# # order:D C B A (4,3,2,1) or D B C A (4,2,3,1)
+# A <- rnorm(500) # Generate 250 random values for node 1
+# B <- A + rnorm(500) # Generate 250 random values for node 2
+# C <- A + rnorm(500) # Calculate node 3 as the sum of node 1 and node 2
+# D <- B + C + runif(500)
+# data <- data.frame(A, B, C, D) # Combine into a dataframe
+# 
+# true_DAG <-  matrix(c(0,1,1,0,
+#                       0,0,0,1,
+#                       0,0,0,1,
+#                       0,0,0,0), nrow = 4, ncol = 4, byrow = TRUE)
+# 
+# # Step 2: Define Nodes and Score Parameters
+# library(BiDAG) # Load the BiDAG package
+# scoreParam <- BiDAG::scoreparameters("bge", data) # Define score parameters using the generated dataset
+# 
+# # Step 3: Model Learning and Inference
+# # Assuming you're still interested in sampling and edge posterior probabilities
+# samplefit <- sampleBN(scoreParam, "orderIter") # Learning the network structure
+# edgesposterior <- edgep(samplefit, pdag=FALSE, burnin=0.2) # Calculating edge posterior probabilities
+#     A          B          C         D
+# A 0.00000000 0.67582761 0.70580887 0.0780762
+# B 0.27357901 0.00000000 0.08307308 0.9412867
+# C 0.29044347 0.03747658 0.00000000 0.9312929
+# D 0.04309806 0.05871330 0.06870706 0.0000000
+
+MCMCtype<-3 # 1 means standard structure, 2 with new edge reversal
+# 3 means order MCMC, 4 means partition MCMC, 5 means partition MCMC with new edge reversal
  
 switch(as.character(MCMCtype),
        "1"={ # standard structure MCMC
@@ -119,11 +164,8 @@ switch(as.character(MCMCtype),
        })
 
  
-# Start with empty graph (OR user defined graph OR from other algo. and learn the beta matrix)
-base_score <- 0 # Initialize the base score
-
 # Initialization Parameters
-num_iterations <- 2e2# Total iterations
+num_iterations <- 1e5# Total iterations
 
 # Example 
 starttime_model<-proc.time() 
@@ -131,13 +173,15 @@ starttime_model<-proc.time()
 switch(as.character(MCMCtype),
        "3"={ # # order MCMC
          set.seed(123) 
-         results_seed123 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
-                                     order_stepsize = 100, moveprobs = moveprobs, 
-                                     edgesposterior = edgesposterior )
+         results_seed123 <- BetaOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100, 
+                                                    # order = list(c(2,4,1,3)),
+                                                    order_stepsize = 100, moveprobs = moveprobs,
+                                                    edgesposterior = edgesposterior )
          set.seed(100)
-         results_seed100 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
-                                           order_stepsize = 100, moveprobs = moveprobs, 
-                                           edgesposterior = edgesposterior )
+         results_seed100 <- BetaOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100, 
+                                                    # order = list(c(2,4,1,3)),
+                                                    order_stepsize = 100, moveprobs = moveprobs, 
+                                                    edgesposterior = edgesposterior )
        },
        "4"={ # partition MCMC
          set.seed(123) 
@@ -223,13 +267,13 @@ plotpedges(orderfitBoston123, cutoff = 0, pdag=FALSE)
 pedges <-  list()
 pedges[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
 pedges[[2]] <- edgep(orderfitBoston123, pdag=FALSE)
-pdf("0328plot_order_betaOrder_1e4.pdf")
+pdf("0418plot_order_betaOrder_1e5_1.pdf")
 plot_order_Order <- plotpcor(pedges, xlab="run1", ylab="run2",printedges=TRUE, main = paste("Iteration", num_iterations) )
 cat("order_Order: ",plot_order_Order$MSE, plot_order_Order$R2 , "\n")
 
 pedges_comp <-  list()
-pedges_comp[[1]] <-  edgep(orderfitBoston123, pdag=FALSE)
-pedges_comp[[2]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
+pedges_comp[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
+pedges_comp[[2]] <- results_seed100$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
 dimnames(pedges_comp[[2]]) <- dimnames(pedges_comp[[1]])
 plot_order_betaOrder <- plotpcor(pedges_comp, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. OrderMCMC and BetaSampler")
 cat("order_betaOrder: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
@@ -267,4 +311,6 @@ dev.off()
 #      vertex.size = 15,
 #      vertex.label.color = "black",
 #      vertex.label.cex = 0.8)
+
+
 

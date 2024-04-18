@@ -6,18 +6,20 @@
 # iterations = 100
 # stepsave = 10
 
-orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
-  currentpermy<-startorder #starting order represented as a permutation
+orderMCMC_betas_gibbs<-function(n,startorder,iterations,betas,stepsave,moveprobs){
+  currentpermy <- startorder #starting order represented as a permutation
+  currentbeta <- betas
   currentorderscores<-orderscore_betas(n,c(1:n), betas, currentpermy) #starting score
   # cat("currentorderscores:", currentorderscores, "\n")
   currenttotallogscore<-sum(currentorderscores) #log total score of all DAGs in the starting order
   
-  currentDAG<-samplescore(n,betas,currentpermy) #score of a single DAG sampled from the starting order
+  currentDAG<-samplescore(n,betas,currentpermy, base_score) #score of a single DAG sampled from the starting order
   
   L1 <- list() # stores the adjacency matrix of a DAG sampled from the orders
   L2 <- list() # stores its log BGe score
   L3 <- list() # stores the log BGe score of the entire order
   L4 <- list() # stores the orders as permutations
+  L5 <- list() # stores the beta matrix 
   
   zlimit<- floor(iterations/stepsave) + 1 # number of outer iterations
   length(L1) <- zlimit
@@ -29,6 +31,7 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
   L2[[1]]<-currentDAG$logscore #starting DAG score
   L3[[1]]<-currenttotallogscore #starting order score
   L4[[1]]<-currentpermy #starting order
+  L5[[1]]<-currentbeta #starting order
   
   for (z in 2:zlimit){ #the MCMC chain loop with 'iteration' steps is in two parts
     count_accept <- 0
@@ -52,7 +55,7 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         proposedpermy[sampledelements]<-currentpermy[rev(sampledelements)] #proposed new order
         
         rescorenodes<-proposedpermy[min(sampledelements):max(sampledelements)] #we only need to rescore these nodes between the swapped elements to speed up the calculation
-
+        
         proposedorderrescored<-orderscore_betas(n,rescorenodes, betas, proposedpermy)#their scores
         
         proposedtotallogscore<-currenttotallogscore-sum(currentorderscores[rescorenodes])+sum(proposedorderrescored[rescorenodes]) #and the new log total score by updating only the necessary nodes
@@ -68,7 +71,7 @@ orderMCMC_betas<-function(n,startorder,iterations,betas,stepsave,moveprobs){
         acceptance_prob <-  c(acceptance_prob, count_accept / stepsave)
       }
     }
-    currentDAG<-samplescore(n,betas,currentpermy)
+    currentDAG<-samplescore(n,betas,currentpermy, base_score)
     L1[[z]]<-currentDAG$incidence #store adjacency matrix of a sampled DAG each 'stepsave'
     L2[[z]]<-currentDAG$logscore #and log score of a sampled DAG
     L3[[z]]<-currenttotallogscore #and the current order score
