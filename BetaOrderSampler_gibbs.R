@@ -13,37 +13,41 @@
 # time for order MCMC: 0.009 0 0.009 
 # time for Sample 30 DAGs: 0.007 0 0.008 
 # time for Beta matrix: 0.007 0 0.007 
+# order_iter = 100
+# order_stepsize = 10
+# burnin = 0.2
+# iteration = 100
 
-BetaOrderSampler_gibbs <- function(n, iteration, order_iter = 10, order = NULL, 
-                             order_stepsize = 1, moveprobs, base_score = 0, 
+BetaOrderSampler_gibbs <- function(n, iteration, order_iter = 100, order = NULL, 
+                             order_stepsize = 10, moveprobs, base_score = 0, 
                              starting_dag = NULL, betas_init = NULL, skeleton = FALSE,
-                             edgesposterior, burnin = 0.2 ) {
-  # Define your set of elements
-  elements <- c(1:n)
-  # Generate all permutations
-  permutations <- permn(elements)
+                             edgesposterior, burnin = 0.5 ) {
+  elements <- c(1:n) # Define set of elements
+  nr_sample <- 1 # Number of generated DAGs under one order
   
-  nr_sample <- 1
-  # Initialize starting DAG if not provided
-  if (is.null(starting_dag)) {
-    starting_dag <- list(matrix(0, nrow = n, ncol = n))
-  }
-  # Initialize beta matrix
-  if (is.null(betas_init)) {
-    calcultion_betas_init <- calculateBetaScoresArray_hash(starting_dag, k = 1, n)
-    betas_init <- calcultion_betas_init$allBetaScores[,,1]
-    totalscore_of_orders_prev <- Reduce("+", lapply(1:length(permutations), 
-                                                    function(k) sum(orderscore_betas(n,c(1:n), betas_init, permutations[[k]]))))
-    # totalscore_of_DAGs <- numeric()
-    # totalscore_of_DAGs[1] <- nr_sample*calcultion_betas_init$target_DAG_score
-  }
   # Initialize order
   if (is.null(order)) {
     order <-  list(seq_len(n))
   }
+  # Initialize starting DAG if not provided
+  if (is.null(starting_dag)) {
+    # starting_dag <- list(matrix(0, nrow = n, ncol = n))
+    starting_dag <-list(samplescore(n, betas = matrix(0, nrow = n, ncol = n), order[[1]])$incidence)
+  }
+  
+
+  # Initialize beta matrix
+  if (is.null(betas_init)) {
+    calcultion_betas_init <- calculateBetaScoresArray_hash(starting_dag, k = 1, n, base_score = 0)
+    betas_init <- calcultion_betas_init$allBetaScores[,,1]
+    # base_score <- calcultion_betas_init$target_DAG_score
+    base_score <- 0
+  }
   
   # Initialize variables
-  weighted_betas <- list(betas_init)
+  beta_prev <- betas_init
+  order_prev <- order
+  
   ess_DAGs <- numeric()
   count_accept <- numeric()
   diff_BiDAGs <- numeric()
@@ -51,104 +55,72 @@ BetaOrderSampler_gibbs <- function(n, iteration, order_iter = 10, order = NULL,
   iter <- iteration + burin_iter
   
   # DAG <- starting_dag
-  init_sampled_DAGs <- lapply(1:nr_sample, function(x) samplescore(n, betas_init, order[[1]], base_score))
+  init_sampled_DAGs <- lapply(1:nr_sample, function(x) samplescore(n, betas_init, order[[1]]))
   prev_DAG <- lapply(init_sampled_DAGs, function(dag) dag$incidence) 
-  totalscore_of_DAGs_prev <- calculateBetaScoresArray_hash(prev_DAG, k = length(prev_DAG), n)$target_DAG_score
+  BiDAGscore_prev <- calculateBetaScoresArray_hash(prev_DAG, k = length(prev_DAG), n, base_score)$target_DAG_score
+  
   compress_DAG <- starting_dag
   total_DAG <- matrix(0, nrow = n, ncol = n)
   edge_over_time <- array(0, dim = c(n, n, iter))
   edge_diff_over_time <- array(0, dim = c(n, n, iter))
   prev_weight <- 1
-  
+  weight_MIS <- 1
+  weight_MIS_sum <- 1
+  weight <- numeric()
   
   # Looping through iterations
   for (i in 1:iter) {
-    beta_prev <- weighted_betas[[i]]
-    order_prev <- order[[i]]
     
-    starttime_order<-proc.time() # for timing the problem
     # Sampling orders with OrderMCMC
-    example <- orderMCMC_betas(n,startorder = order_prev ,iterations = order_iter, betas = beta_prev,
+    example <- orderMCMC_betas(n,startorder = order_prev[[length(order_prev)]] ,iterations = order_iter, betas = beta_prev,
                                stepsave = order_stepsize, moveprobs) # run the Order MCMC code
     
-    endtime_order<-proc.time()
-    endtime_order<-endtime_order-starttime_order
-    
-    #Store the last order from the chain
-    permy <- unlist(example[[4]][length(example[[4]])])
-    
-    starttime_DAGs<-proc.time() # for timing the problem
     #  Sample nr_sample DAGs using the last sampled order from OrderMCMC and old beta matrix
-    sampled_DAGs <- lapply(1:nr_sample, function(x) samplescore(n, beta_prev, permy, base_score))
-    
-    endtime_DAGs<-proc.time()
-    endtime_DAGs<-endtime_DAGs-starttime_DAGs
-    
-    # Extracting incidence matrices and log scores (old beta matrix)
-    incidence_matrices <-lapply(sampled_DAGs, function(dag) dag$incidence) 
-    incidence_logscore<-lapply(sampled_DAGs, function(dag) dag$logscore) # scores of new DAGs under old beta
-    
-    starttime_beta<-proc.time() # for timing the problem
+    incidence_matrices <- example[[1]][-1] # List of DAGs sampled under previous beta
+    incidence_logscore <- example[[2]][-1] # List of logscores of new sampled DAGs under previous beta
+
     # Update beta matrix using the weights from sampled DAGs
-    calculation_beta_values <- calculateBetaScoresArray_hash(incidence_matrices, k = length(incidence_matrices) ,n)
-    totalscore_DAGs <- calculation_beta_values$target_DAG_score
+    calculation_beta_values <- calculateBetaScoresArray_hash(incidence_matrices, k = length(incidence_matrices) ,n, base_score = base_score)
+    BiDAGscore_propose_list <- calculation_beta_values$target_DAG_score
+    BiDAGscore_propose <- calculate_final_score(BiDAGscore_propose_list, "sum")
     beta_values <- calculation_beta_values$allBetaScores
-    
-    endtime_beta<-proc.time()
-    endtime_beta<-endtime_beta-starttime_beta
-    
+     
     # Update beta matrix using importance sampling
-    is_results <- importance_DAG(DAGs = incidence_matrices, score_under_betas = incidence_logscore, target_scores = totalscore_DAGs)
+    is_results <- importance_DAG(DAGs = incidence_matrices, score_under_betas = incidence_logscore, target_scores = BiDAGscore_propose_list)
     weights_proposed <- is_results$importance_weights # normalised weights under old beta
     
     #New beta matrix using the normalised weights
-    weighted_betas_proposed <- Reduce("+", lapply(1:length(weights_proposed), 
-                                                  function(k) beta_values[,,k] * weights_proposed[k]))
-    proposed_totalscore_of_orders <- Reduce("+", lapply(1:length(permutations), 
-                                                        function(k) sum(orderscore_betas(n,c(1:n), weighted_betas_proposed, permutations[[k]]))))
-    
-    # cat("time for order MCMC:",endtime_order, ",DAGs",endtime_DAGs, ",beta",endtime_beta, "\n")
-    
-    # orderscore_prev <- unlist(example[[3]][length(example[[3]])]) #new order, previous beta
-    # orderscore_prop <- sum(orderscore_betas(n,c(1:n), weighted_betas_proposed, order_prev))
+    weighted_betas_proposed <- Reduce("+", lapply(1:length(weights_proposed), function(k) beta_values[,,k] * weights_proposed[k]))
     
     # Log score of new DAG set under the old beta
-    # nDAGoBeta_logscore <- Reduce("+", lapply(1:length(weights_proposed), function(k) incidence_logscore[[k]] * weights_proposed[k]))
-    nDAGoBeta_logscore <- Reduce("+", lapply(1:length(weights_proposed), function(k) incidence_logscore[[k]]))
-    # Log score of old DAG set under the new beta
-    oDAGnBeta_logscore <- calculate_DAG_score(DAG_list = prev_DAG ,permy = order_prev, weights = NULL ,betas = weighted_betas_proposed)
+    nDAGoBeta_logscore <- calculate_final_score(unlist(incidence_logscore), "sum")
     
+    # Log score of old DAG set under the new beta
+    oDAGnBeta_logscore_list <- lapply(1:length(prev_DAG), 
+                                 function(k) calculate_DAG_score(DAG_list = prev_DAG[k], permy = order_prev[[k]], weights = NULL ,
+                                                     betas = weighted_betas_proposed, base_score = base_score))
+    oDAGnBeta_logscore <- calculate_final_score(unlist(oDAGnBeta_logscore_list), "sum") 
+
     # Acceptance ratio
     # Test
-    wB <- is_results$log_diff/nr_sample + totalscore_of_orders_prev
-    inv_wA <- sum(oDAGnBeta_logscore - totalscore_of_DAGs_prev)/nr_sample - proposed_totalscore_of_orders
-    ratio <- exp(wB + inv_wA)
-    # cat("totalscore_DAGs", sum(totalscore_DAGs)/nr_sample, "totalscore_of_prev",sum(totalscore_of_DAGs_prev)/nr_sample,"\n")
-    # cat("totalscore_DAGs", sum(totalscore_DAGs), "incidence_logscore",sum(unlist(incidence_logscore)),"\n")
-    # cat("oDAGnBeta", sum(oDAGnBeta_logscore), "totalscore_of_prev", sum(totalscore_of_DAGs_prev),"\n")
-    # Test
-    #ratio <- exp(totalscore_DAGs - totalscore_of_DAGs[i] + orderscore_prop -orderscore_prev + current_logscore -proposed_logscore)
+    w_prev <- BiDAGscore_prev - oDAGnBeta_logscore
+    w_current <- BiDAGscore_propose - nDAGoBeta_logscore
     
-    # Metropolis-Hastings acceptance step
-    if(runif(1) < ratio){ 
-      compress_DAG[[i+1]] <- is_results$compress_dag
-      weighted_betas[[i+1]] <- weighted_betas_proposed
-      order[[i+1]] <- permy
-      count_accept[i] <- 1 # Accept 
-      totalscore_of_DAGs_prev <- totalscore_DAGs
-      prev_DAG <- incidence_matrices
-      totalscore_of_orders_prev <- proposed_totalscore_of_orders
-      cat("wB",wB, "inv_wA", inv_wA, "\n")
-    }else{
-      compress_DAG[[i+1]] <- compress_DAG[[i]]
-      weighted_betas[[i+1]] <- weighted_betas[[i]]
-      order[[i+1]] <- order[[i]]
-      count_accept[i] <- 0 # Reject
-    }
+    weight[i] <- w_current/w_prev
+
+    compress_DAG[[i+1]] <- is_results$compress_dag
+    weighted_betas[[i+1]] <- weighted_betas_proposed
+    BiDAGscore_prev <- BiDAGscore_propose
+    prev_DAG <- incidence_matrices
+    order_prev <- example[[4]][-1]
     
     if (length(compress_DAG)-1 > burin_iter) {
-      total_DAG <- total_DAG + compress_DAG[[i+1]]
-      current_mat <- total_DAG/(i - burin_iter) # Average the edges of DAGs after burn in part
+      weight_MIS <- weight_MIS*weight[i]
+      weight_MIS_sum <- weight_MIS_sum + weight_MIS
+      
+      total_DAG <- total_DAG + weight_MIS * compress_DAG[[i+1]]
+      
+      current_mat <- total_DAG/weight_MIS_sum # Average the edges of DAGs after burn in part
       diff_mat <- CompareDAG(current_mat, edgesposterior)
     }else{
       sum_matrix <- Reduce("+", compress_DAG[1:length(compress_DAG)])

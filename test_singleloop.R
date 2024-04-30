@@ -39,8 +39,13 @@ scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:250,1:n])
 
 #posterior probabilities of edges by averaging over a sample of DAGs obtained via an MCMC scheme.
 # In skeleton space
-samplefit<-sampleBN(scoreParam, "orderIter")
-edgesposterior<-edgep(samplefit, pdag=FALSE, burnin=0.2)
+# samplefit<-sampleBN(scoreParam, "orderIter")
+# edgesposterior<-edgep(samplefit, pdag=FALSE, burnin=0.2)
+
+edgesposterior <-  matrix(c(0,0.003747,0.37539,0.536539,
+                      0.0006246,0, 0.179262,0.004372,
+                      0.624609,0.820737,0,0.06121,
+                      0.131792,0.003123,0.019987,0), nrow = 4, ncol = 4, byrow = TRUE)
 
 #          crim          zn      indus        chas
 # crim  0.0000000000 0.003747658 0.37539038 0.536539663
@@ -48,7 +53,13 @@ edgesposterior<-edgep(samplefit, pdag=FALSE, burnin=0.2)
 # indus 0.6246096190 0.820737039 0.00000000 0.061211743
 # chas  0.1317926296 0.003123048 0.01998751 0.000000000
 
-# 2,3,1,4
+true_DAG <-  matrix(c(0,0,32,32,
+                      0,0,17,0,
+                      60,80,0,0,
+                      10,0,0,0), nrow = 4, ncol = 4, byrow = TRUE)
+
+# 2,3,4,1   "zn" "indus" "chas"  "crim" 
+# 4,2,1,3 "chas"  "zn"    "crim"  "indus"
 
 
 
@@ -163,9 +174,9 @@ switch(as.character(MCMCtype),
          print('Not implemented')
        })
 
- 
+
 # Initialization Parameters
-num_iterations <- 1e5# Total iterations
+num_iterations <- 5000# Total iterations
 
 # Example 
 starttime_model<-proc.time() 
@@ -174,12 +185,12 @@ switch(as.character(MCMCtype),
        "3"={ # # order MCMC
          set.seed(123) 
          results_seed123 <- BetaOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100, 
-                                                    # order = list(c(2,4,1,3)),
+                                                    # order = list(c(4,2,1,3)),
                                                     order_stepsize = 100, moveprobs = moveprobs,
                                                     edgesposterior = edgesposterior )
          set.seed(100)
-         results_seed100 <- BetaOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100, 
-                                                    # order = list(c(2,4,1,3)),
+         results_seed100 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
+                                                    # order = list(c(4,2,1,3)),
                                                     order_stepsize = 100, moveprobs = moveprobs, 
                                                     edgesposterior = edgesposterior )
        },
@@ -200,6 +211,7 @@ endtime_model<-endtime_model-starttime_model
 print(endtime_model)
 
 sum(results_seed123$acceptCount)/num_iterations
+sum(results_seed100$acceptCount)/num_iterations
 # num_iterations <- 1e4 
 # user   system  elapsed 
 # 1307.209    5.505 1319.328 (calculateBetaScoresArray)
@@ -267,13 +279,13 @@ plotpedges(orderfitBoston123, cutoff = 0, pdag=FALSE)
 pedges <-  list()
 pedges[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
 pedges[[2]] <- edgep(orderfitBoston123, pdag=FALSE)
-pdf("0418plot_order_betaOrder_1e5_1.pdf")
+# pdf("0422plot_order_betaOrder_set_ofDAGs_1e4.pdf")
 plot_order_Order <- plotpcor(pedges, xlab="run1", ylab="run2",printedges=TRUE, main = paste("Iteration", num_iterations) )
 cat("order_Order: ",plot_order_Order$MSE, plot_order_Order$R2 , "\n")
 
 pedges_comp <-  list()
 pedges_comp[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
-pedges_comp[[2]] <- results_seed100$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
+pedges_comp[[2]] <- results_seed123$edge_prob[,,length(results_seed100$edge_prob[1,1,])]
 dimnames(pedges_comp[[2]]) <- dimnames(pedges_comp[[1]])
 plot_order_betaOrder <- plotpcor(pedges_comp, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. OrderMCMC and BetaSampler")
 cat("order_betaOrder: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")

@@ -16,11 +16,10 @@
 # moveprobs = moveprobs
 # edgesposterior = edgesposterior
 
-
 BetaOrderSampler <- function(n, iteration, order_iter, order = NULL, 
                              order_stepsize, moveprobs, base_score = 0, 
                              starting_dag = NULL, betas_init = NULL, skeleton = FALSE,
-                             edgesposterior, burnin = 0.2) {
+                             edgesposterior, burnin = 0.4) {
   
   elements <- c(1:n) # Define set of elements
   permutations <- permn(elements) # Generate all permutations
@@ -30,10 +29,8 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
   if (is.null(order)) {
     order <-  list(seq_len(n))
   }
-  
   # Initialize starting DAG if not provided
   if (is.null(starting_dag)) {
-    # starting_dag <- list(matrix(0, nrow = n, ncol = n))
     starting_dag <-list(samplescore(n, matrix(0, nrow = n, ncol = n), order[[1]])$incidence)
   }
   # Initialize beta matrix
@@ -42,13 +39,11 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
     betas_init <- calcultion_betas_init$allBetaScores[,,1]
     # base_score <- calcultion_betas_init$target_DAG_score
     base_score <- 0
-    
     # Idea: subtract the highest order score
-    prev_logscore_list <- sapply(1:length(permutations), function(k) sum(orderscore_betas(n, c(1:n), betas_init, permutations[[k]])))
-    max_logscore <- max(prev_logscore_list)
-    exp_totalscore_orders_prev <- sum(exp(prev_logscore_list - max_logscore))
-    totalscore_orders_prev <- log(exp_totalscore_orders_prev) + max_logscore
-
+    prev_logscore_list <- sapply(1:length(permutations), function(k) {
+      sum(orderscore_betas(n, c(1:n), betas_init, permutations[[k]]))
+      })
+    totalscore_orders_prev <- calculate_final_score(prev_logscore_list, "sum")
   }
   
   # Initialize variables
@@ -66,7 +61,11 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
   
   init_sampled_DAGs <- lapply(1:nr_sample, function(x) samplescore(n, betas_init, order[[1]]))
   DAG_prev <- lapply(init_sampled_DAGs, function(dag) dag$incidence) 
-  BiDAGscore_prev <- calculateBetaScoresArray_hash(DAG_prev, k = length(DAG_prev), n, base_score)$target_DAG_score
+  incidence_logscore<-lapply(init_sampled_DAGs, function(dag) dag$logscore) 
+  BiDAGscore_prev_list <- calculateBetaScoresArray_hash(DAG_prev, k = length(DAG_prev), n, base_score)$target_DAG_score
+  # Update beta matrix using importance sampling
+  is_results <- importance_DAG(DAGs = DAG_prev, score_under_betas = incidence_logscore, target_scores = BiDAGscore_prev_list)
+  weights_prev <- is_results$importance_weights # normalised weights under old beta
   
   # Looping through iterations
   for (i in 1:iter) {
@@ -77,27 +76,18 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
                               stepsave = order_stepsize, moveprobs)  # Sampling orders with OrderMCMC
 
     permy <- unlist(example[[4]][length(example[[4]])])#Store the last order from the chain
-    print(permy)
     
-    starttime_DAGs<-proc.time() # for timing the problem
     #  Sample nr_sample DAGs using the last sampled order from OrderMCMC and old beta matrix
     sampled_DAGs <- lapply(1:nr_sample, function(x) samplescore(n, beta_prev, permy))
-    
-    endtime_DAGs<-proc.time()
-    endtime_DAGs<-endtime_DAGs-starttime_DAGs
     
     # Extracting incidence matrices and log scores (old beta matrix)
     incidence_matrices <-lapply(sampled_DAGs, function(dag) dag$incidence) 
     incidence_logscore<-lapply(sampled_DAGs, function(dag) dag$logscore) # scores of new DAGs under old beta
     
-    starttime_beta<-proc.time() # for timing the problem
     # Update beta matrix using the weights from sampled DAGs
     calculation_beta_values <- calculateBetaScoresArray_hash(incidence_matrices, k = length(incidence_matrices) ,n, base_score = base_score)
     BiDAGscore_propose <- calculation_beta_values$target_DAG_score
     beta_values <- calculation_beta_values$allBetaScores
-    
-    endtime_beta<-proc.time()
-    endtime_beta<-endtime_beta-starttime_beta
     
     # Update beta matrix using importance sampling
     is_results <- importance_DAG(DAGs = incidence_matrices, score_under_betas = incidence_logscore, target_scores = BiDAGscore_propose)
@@ -109,46 +99,35 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
     
     proposed_logscore_list <- sapply(1:length(permutations), 
                                      function(k) sum(orderscore_betas(n, c(1:n), weighted_betas_proposed, permutations[[k]])))
-    proposed_max_log_score <- max(proposed_logscore_list)
-    proposed_exp_totalscore_orders_prev <- sum(exp(proposed_logscore_list - proposed_max_log_score))
-    proposed_totalscore_orders <- log(proposed_exp_totalscore_orders_prev) + proposed_max_log_score
-    
-    # cat("time for order MCMC:",endtime_order, ",DAGs",endtime_DAGs, ",beta",endtime_beta, "\n")
+    proposed_totalscore_orders <- calculate_final_score(proposed_logscore_list, "sum")
     
     # orderscore_prev <- unlist(example[[3]][length(example[[3]])]) #new order, previous beta
     # orderscore_prop <- sum(orderscore_betas(n,c(1:n), weighted_betas_proposed, order_prev))
     
-    # Log score of new DAG set under the old beta
-    # nDAGoBeta_logscore_list <- sapply(1:length(weights_proposed), function(k) incidence_logscore[[k]])
-    # nDAGoBeta_max_logscore <- max(nDAGoBeta_logscore_list)
-    # nDAGoBeta_exp_logscore <- sum(exp(nDAGoBeta_logscore_list - nDAGoBeta_max_logscore))
-    # nDAGoBeta_logscore <- log(nDAGoBeta_exp_logscore)
     # Log score of old DAG set under the new beta
-    oDAGnBeta_logscore <- calculate_DAG_score(DAG_list = DAG_prev ,permy = order_prev, weights = NULL ,
+    oDAGnBeta_logscore_list <- calculate_DAG_score(DAG_list = DAG_prev ,permy = order_prev, weights = NULL ,
                                               betas = weighted_betas_proposed, base_score = base_score)
-    list_logscore_prev <- oDAGnBeta_logscore - BiDAGscore_prev
-    max_logscore_prev <- max(list_logscore_prev)
-    expscore_prev <- sum(exp(list_logscore_prev-max_logscore_prev))
-    logscore_prev <- log(expscore_prev) + max_logscore_prev
-    
+  
     # Acceptance ratio
     # Test
-    wB <- is_results$log_diff
-    inv_wA <- logscore_prev
+    wB <- sum(is_results$log_diff*weights_proposed)
+    inv_wA <- sum((oDAGnBeta_logscore_list - BiDAGscore_prev_list)*weights_prev)
     log_ratio <- wB + inv_wA  + totalscore_orders_prev - proposed_totalscore_orders
     ratio <- exp(log_ratio)
-    print(log_ratio)
-    cat("ALLorders_prev",totalscore_orders_prev, "ALLorders_proposed", proposed_totalscore_orders, "\n")
 
     # Metropolis-Hastings acceptance step
     if(runif(1) < ratio){ 
       compress_DAG[[i+1]] <- is_results$compress_dag
+      # compress_DAG[[i+1]] <- Reduce("+", lapply(1:length(incidence_matrices), function(k) incidence_matrices[[k]]/nr_sample))
       weighted_betas[[i+1]] <- weighted_betas_proposed
+      weights_prev <- weights_proposed
       order[[i+1]] <- permy
       count_accept[i] <- 1 # Accept 
-      BiDAGscore_prev <- BiDAGscore_propose
+      BiDAGscore_prev_list <- BiDAGscore_propose
       DAG_prev <- incidence_matrices
       totalscore_orders_prev <- proposed_totalscore_orders
+      print(permy)
+      print(log_ratio)
       cat("wB",wB, "inv_wA", inv_wA, "\n")
     }else{
       compress_DAG[[i+1]] <- compress_DAG[[i]]
@@ -171,7 +150,6 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
     edge_diff_over_time[,,i] <- diff_mat # Store the difference per edge
     diff_BiDAG <-norm(diff_mat,type = "F") # Store the difference of the DAG matrix
     diff_BiDAGs <- c(diff_BiDAGs, diff_BiDAG)
-    
   }
   
   # Return the results

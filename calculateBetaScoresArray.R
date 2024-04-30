@@ -44,6 +44,27 @@ calculate_DAG_score <- function(DAG_list, permy, weights ,betas, base_score, par
   return(logscore)
 }
 
+
+# Function that computes the final score based on log scores.
+# The 'operation' parameter determines whether to sum or average the scores.
+calculate_final_score <- function(log_scores, operation = c("sum", "mean","subtract")) {
+  
+  operation <- match.arg(operation) # Ensure 'operation' is one of the allowed values
+  max_logscore <- max(log_scores) # Find the maximum log score to adjust the scores for numerical stability
+  adjusted_log_scores <- log_scores - max_logscore
+  
+  # Depending on the operation, sum or average the exponentiated adjusted scores
+  if (operation == "sum") {
+    result <- sum(exp(adjusted_log_scores))
+  } else if (operation == "mean") {
+    result <- mean(exp(adjusted_log_scores))
+  }
+  # Take the log of the result and add back the max log score
+  final_score <- log(result) + max_logscore
+  
+  return(final_score)
+}
+
 ####### Hash Tables ########
 # Initialize two environments as hash tables
 parentSetBetaCache <- new.env(hash = TRUE, parent = emptyenv()) 
@@ -85,14 +106,14 @@ computeAndCacheBetaValues <- function(childNode, parentSet, n) {
   } else {
     # Beta values not found in cache, compute them
     parentSetScore <- getStoredValue(parentSetBetaCache, parentSetKey)
-    betaValues <- rep(0, times = (n + 1)) # Store the beta values(colunm) + the score of the current parent set!
+    betaValues <- numeric() # Store the beta values(colunm) + the score of the current parent set!
     if (is.null(parentSetScore)){
       # Compute and cache the score for the current parent set
       parentSetScore <- BiDAG:::DAGcorescore(childNode, parentnodes = parentSet, scoreParam$n, scoreParam)# Compute score for childNode with parentSet
       count_DAGcore <- count_DAGcore+1
       storeValue(parentSetBetaCache, parentSetKey, parentSetScore)
-      betaValues[n+1] <- parentSetScore
     }
+    betaValues[n+1] <- parentSetScore # the score of the current parent set
     # Compute beta values for individual parents by adding/removing them
     for (parentNode in 1:n) {
       if (parentNode != childNode) {
@@ -152,6 +173,7 @@ calculateBetaScoresArray_hash <- function(sampledDAGs, k, n, base_score){
       calculation_column_beta <- computeAndCacheBetaValues(childNode = childNode, parentSet = parentNodes, n)
       column_beta <- calculation_column_beta$betaValues
       count <- count + calculation_column_beta$count_DAGcore
+      # cat("DAG_parentset:",calculation_column_beta$DAG_parentset, "childNode", childNode ,",parentNodes",parentNodes, "\n")
       incidence_score <- incidence_score + calculation_column_beta$DAG_parentset
       allBetaScores[ , childNode, dagIndex] <- array(column_beta, dim = c(length(column_beta), 1, 1))
     }
@@ -169,10 +191,6 @@ importance_DAG <- function(DAGs, score_under_betas, target_scores){
   # To avoid numerical issues, subtract the max score before exponentiating
   max_score <- max(differ_score)
   importance_weights <- exp(differ_score - max_score)
-  # log_diff <- log(sum(importance_weights))
-  max_diff_logscore <- max(differ_score)
-  exp_diff_logscore <- sum(exp(differ_score - max_diff_logscore))
-  log_diff <- log(exp_diff_logscore) + max_logscore
 
   # Normalize the exponentiated scores to get the importance weights
   normalised_weights <- importance_weights / sum(importance_weights)
@@ -181,7 +199,7 @@ importance_DAG <- function(DAGs, score_under_betas, target_scores){
   compress_dag <- Reduce("+", lapply(1:length(normalised_weights), 
                                      function(k) DAGs[[k]] * normalised_weights[k]))
   
-  return(list(importance_weights = normalised_weights, log_diff = log_diff, ess_value = ess_value, compress_dag = compress_dag))
+  return(list(importance_weights = normalised_weights, log_diff = differ_score, ess_value = ess_value, compress_dag = compress_dag))
 }
 
 
