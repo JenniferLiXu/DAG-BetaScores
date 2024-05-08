@@ -30,6 +30,8 @@ source('./calculateBetaScoresArray.R')
 source('./compareDAG_skeleton.R')
 source('./BetaOrderSampler.R') #our method
 source('./BetaOrderSampler_OneDAG.R') 
+source('./BetaOrderSampler_gibbs.R') 
+
 
 # Example: Generating a random dataset
 n <- 4 # Define the number of nodes,
@@ -39,8 +41,8 @@ scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:250,1:n])
 
 #posterior probabilities of edges by averaging over a sample of DAGs obtained via an MCMC scheme.
 # In skeleton space
-# samplefit<-sampleBN(scoreParam, "orderIter")
-# edgesposterior<-edgep(samplefit, pdag=FALSE, burnin=0.2)
+samplefit<-sampleBN(scoreParam, "orderIter")
+edgesposterior<-edgep(samplefit, pdag=FALSE, burnin=0.2)
 
 edgesposterior <-  matrix(c(0,0.003747,0.37539,0.536539,
                       0.0006246,0, 0.179262,0.004372,
@@ -52,51 +54,6 @@ edgesposterior <-  matrix(c(0,0.003747,0.37539,0.536539,
 # zn    0.0006246096 0.000000000 0.17926296 0.004372267
 # indus 0.6246096190 0.820737039 0.00000000 0.061211743
 # chas  0.1317926296 0.003123048 0.01998751 0.000000000
-
-true_DAG <-  matrix(c(0,0,32,32,
-                      0,0,17,0,
-                      60,80,0,0,
-                      10,0,0,0), nrow = 4, ncol = 4, byrow = TRUE)
-
-# 2,3,4,1   "zn" "indus" "chas"  "crim" 
-# 4,2,1,3 "chas"  "zn"    "crim"  "indus"
-
-
-
-# Toy example
-
-# # Step 1: Generate a Synthetic Dataset
-# n <- 4 # Define the number of nodes
-# set.seed(123) # For reproducibility
-# # A → B
-# # A → C
-# # B → D
-# # C → D
-# # order:D C B A (4,3,2,1) or D B C A (4,2,3,1)
-# A <- rnorm(500) # Generate 250 random values for node 1
-# B <- A + rnorm(500) # Generate 250 random values for node 2
-# C <- A + rnorm(500) # Calculate node 3 as the sum of node 1 and node 2
-# D <- B + C + runif(500)
-# data <- data.frame(A, B, C, D) # Combine into a dataframe
-# 
-# true_DAG <-  matrix(c(0,1,1,0,
-#                       0,0,0,1,
-#                       0,0,0,1,
-#                       0,0,0,0), nrow = 4, ncol = 4, byrow = TRUE)
-# 
-# # Step 2: Define Nodes and Score Parameters
-# library(BiDAG) # Load the BiDAG package
-# scoreParam <- BiDAG::scoreparameters("bge", data) # Define score parameters using the generated dataset
-# 
-# # Step 3: Model Learning and Inference
-# # Assuming you're still interested in sampling and edge posterior probabilities
-# samplefit <- sampleBN(scoreParam, "orderIter") # Learning the network structure
-# edgesposterior <- edgep(samplefit, pdag=FALSE, burnin=0.2) # Calculating edge posterior probabilities
-#     A          B          C         D
-# A 0.00000000 0.67582761 0.70580887 0.0780762
-# B 0.27357901 0.00000000 0.08307308 0.9412867
-# C 0.29044347 0.03747658 0.00000000 0.9312929
-# D 0.04309806 0.05871330 0.06870706 0.0000000
 
 MCMCtype<-3 # 1 means standard structure, 2 with new edge reversal
 # 3 means order MCMC, 4 means partition MCMC, 5 means partition MCMC with new edge reversal
@@ -149,50 +106,43 @@ switch(as.character(MCMCtype),
          moveprobs<-moveprobs/sum(moveprobs) # normalisation
          if(!(length(moveprobs)==5)){print('Vector of move probabilities has the wrong length!')}
        },
-       "5"={ # partition MCMC with edge reversal
-         iterations<-100 #number of iterations in the chain
-         # Choose the probability of the different moves
-         # 1 is swap two nodes from different partition elements
-         # 2 is to only swap nodes from adjacent elements
-         # 3 is to split or join partition elements
-         # 4 is to move a single node
-         # 5 is to stay still (officially needed for convergence)
-         # 6 is the new edge reversal
-         prob1start<-37/100
-         prob1<-prob1start*100
-         if(n>3){ prob1<-round(6*prob1*n/(n^2+10*n-24)) }
-         prob1<-prob1/100
-         prob2start<-92/100-prob1start
-         prob2<-prob2start*100
-         if(n>3){ prob2<-round(6*prob2*n/(n^2+10*n-24)) }
-         prob2<-prob2/100
-         moveprobs<-c(prob1,prob1start-prob1,prob2start-prob2,prob2,0.01,0.07)
-         moveprobs<-moveprobs/sum(moveprobs) # normalisation
-         if(!(length(moveprobs)==6)){print('Vector of move probabilities has the wrong length!')}
-       },
        {# if none is chosen, we have a problem
          print('Not implemented')
        })
 
 
 # Initialization Parameters
-num_iterations <- 5000# Total iterations
+# num_iterations <- 1000# Total iterations
 
 # Example 
 starttime_model<-proc.time() 
 
 switch(as.character(MCMCtype),
        "3"={ # # order MCMC
-         set.seed(123) 
-         results_seed123 <- BetaOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100, 
+         num_iterations <- 3000 
+         set.seed(100) 
+         results_seed123 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
                                                     # order = list(c(4,2,1,3)),
                                                     order_stepsize = 100, moveprobs = moveprobs,
                                                     edgesposterior = edgesposterior )
-         set.seed(100)
-         results_seed100 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
+         num_iterations <- 3000
+         set.seed(100) 
+         results_seed300 <- BetaOrderSampler_gibbs_ver2(n = n, iteration = num_iterations, order_iter = 100, 
                                                     # order = list(c(4,2,1,3)),
-                                                    order_stepsize = 100, moveprobs = moveprobs, 
+                                                    order_stepsize = 10, moveprobs = moveprobs, 
                                                     edgesposterior = edgesposterior )
+         num_iterations <- 3000
+         set.seed(100) 
+         results_seed500 <- BetaOrderSampler_gibbs_ver3(n = n, iteration = num_iterations, order_iter = 100, 
+                                             # order = list(c(4,2,1,3)),
+                                             order_stepsize = 100, moveprobs = moveprobs, 
+                                             edgesposterior = edgesposterior )
+         # num_iterations <- 10000
+         # set.seed(100) 
+         # results_seed1000 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
+         #                                     # order = list(c(4,2,1,3)),
+         #                                     order_stepsize = 100, moveprobs = moveprobs, 
+         #                                     edgesposterior = edgesposterior )
        },
        "4"={ # partition MCMC
          set.seed(123) 
@@ -210,8 +160,8 @@ endtime_model<-proc.time()
 endtime_model<-endtime_model-starttime_model
 print(endtime_model)
 
-sum(results_seed123$acceptCount)/num_iterations
-sum(results_seed100$acceptCount)/num_iterations
+# sum(results_seed123$acceptCount)/num_iterations
+# sum(results_seed100$acceptCount)/num_iterations
 # num_iterations <- 1e4 
 # user   system  elapsed 
 # 1307.209    5.505 1319.328 (calculateBetaScoresArray)
@@ -279,20 +229,41 @@ plotpedges(orderfitBoston123, cutoff = 0, pdag=FALSE)
 pedges <-  list()
 pedges[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
 pedges[[2]] <- edgep(orderfitBoston123, pdag=FALSE)
-# pdf("0422plot_order_betaOrder_set_ofDAGs_1e4.pdf")
+# pdf("0506plot_order_betaOrder_OneDAGs.pdf")
 plot_order_Order <- plotpcor(pedges, xlab="run1", ylab="run2",printedges=TRUE, main = paste("Iteration", num_iterations) )
 cat("order_Order: ",plot_order_Order$MSE, plot_order_Order$R2 , "\n")
 
-pedges_comp <-  list()
-pedges_comp[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
-pedges_comp[[2]] <- results_seed123$edge_prob[,,length(results_seed100$edge_prob[1,1,])]
-dimnames(pedges_comp[[2]]) <- dimnames(pedges_comp[[1]])
-plot_order_betaOrder <- plotpcor(pedges_comp, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. OrderMCMC and BetaSampler")
-cat("order_betaOrder: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
+pedges_comp123 <-  list()
+pedges_comp123[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
+pedges_comp123[[2]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
+dimnames(pedges_comp123[[2]]) <- dimnames(pedges_comp123[[1]])
+plot_order_betaOrder <- plotpcor(pedges_comp123, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and BetaSampler-5000iter-weigthed")
+cat("order_betaOrder123: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
+
+pedges_comp300 <-  list()
+pedges_comp300[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
+pedges_comp300[[2]] <- results_seed300$edge_prob[,,length(results_seed300$edge_prob[1,1,])]
+dimnames(pedges_comp300[[2]]) <- dimnames(pedges_comp300[[1]])
+plot_order_betaOrder <- plotpcor(pedges_comp300, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and GibbBetaSampler-5000iter")
+cat("order_betaOrder300: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
+
+pedges_comp500 <-  list()
+pedges_comp500[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
+pedges_comp500[[2]] <- results_seed500$edge_prob[,,length(results_seed500$edge_prob[1,1,])]
+dimnames(pedges_comp500[[2]]) <- dimnames(pedges_comp500[[1]])
+plot_order_betaOrder <- plotpcor(pedges_comp500, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and GibbBetaSampler-5000iter-ver3")
+cat("order_betaOrder500: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
+
+# pedges_comp1000 <-  list()
+# pedges_comp1000[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
+# pedges_comp1000[[2]] <- results_seed1000$edge_prob[,,length(results_seed1000$edge_prob[1,1,])]
+# dimnames(pedges_comp1000[[2]]) <- dimnames(pedges_comp1000[[1]])
+# plot_order_betaOrder <- plotpcor(pedges_comp1000, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and BetaSampler-1e4iter")
+# cat("order_betaOrder1000: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
 
 pedges_seed <-  list()
 pedges_seed[[1]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
-pedges_seed[[2]] <- results_seed100$edge_prob[,,length(results_seed100$edge_prob[1,1,])]
+pedges_seed[[2]] <- results_seed300$edge_prob[,,length(results_seed300$edge_prob[1,1,])]
 dimnames(pedges_seed[[1]]) <- dimnames(pedges_comp[[1]])
 dimnames(pedges_seed[[2]]) <- dimnames(pedges_comp[[1]])
 plot_order_betaOrder_seed <- plotpcor(pedges_seed, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. BetaSamplers")

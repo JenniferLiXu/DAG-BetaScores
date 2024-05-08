@@ -62,6 +62,7 @@ BetaOrderSampler_OneDAG <- function(n, iteration, order_iter, order = NULL,
   DAG_prev <- lapply(init_sampled_DAGs, function(dag) dag$incidence) 
   BiDAGscore_prev <- calculateBetaScoresArray_hash(DAG_prev, k = length(DAG_prev), n, base_score)$target_DAG_score
   
+  trace_totalscore <- numeric()
   # Looping through iterations
   for (i in 1:iter) {
     beta_prev <- weighted_betas[[i]]
@@ -116,8 +117,7 @@ BetaOrderSampler_OneDAG <- function(n, iteration, order_iter, order = NULL,
     inv_wA <- oDAGnBeta_logscore - BiDAGscore_prev
     log_ratio <- wB + inv_wA  + totalscore_orders_prev - proposed_totalscore_orders
     ratio <- exp(log_ratio)
-    # cat("wB + inv_wA",wB + inv_wA, "\n")
-    # cat("ALLorders_prev - ALLorders_proposed",totalscore_orders_prev - proposed_totalscore_orders, "\n")
+    trace_totalscore[i] <- totalscore_orders_prev - proposed_totalscore_orders
     
     # Metropolis-Hastings acceptance step
     if(runif(1) < ratio){ 
@@ -128,8 +128,8 @@ BetaOrderSampler_OneDAG <- function(n, iteration, order_iter, order = NULL,
       BiDAGscore_prev <- BiDAGscore_propose
       DAG_prev <- incidence_matrices
       totalscore_orders_prev <- proposed_totalscore_orders
-      cat("wB",wB, "inv_wA", inv_wA, "\n")    
-      print(permy)
+      # cat("wB",wB, "inv_wA", inv_wA, "\n")    
+      # print(permy)
     }else{
       compress_DAG[[i+1]] <- compress_DAG[[i]]
       weighted_betas[[i+1]] <- weighted_betas[[i]]
@@ -161,7 +161,8 @@ BetaOrderSampler_OneDAG <- function(n, iteration, order_iter, order = NULL,
     essValues = ess_DAGs[-c(1:burin_iter)], 
     acceptCount = count_accept[-c(1:burin_iter)], 
     betas = weighted_betas[[iter+1]],
-    diffBiDAGs = diff_BiDAGs[-c(1:burin_iter)]
+    diffBiDAGs = diff_BiDAGs[-c(1:burin_iter)],
+    trace_totalscore = trace_totalscore
     # ,totalscore_of_DAGs = totalscore_of_DAGs[-c(1:burin_iter)]
   )
   )
