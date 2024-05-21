@@ -31,6 +31,7 @@ source('./compareDAG_skeleton.R')
 source('./BetaOrderSampler.R') #our method
 source('./BetaOrderSampler_OneDAG.R') 
 source('./BetaOrderSampler_gibbs.R') 
+source('./SNOrderSampler_OneDAG.R') 
 
 
 # Example: Generating a random dataset
@@ -44,10 +45,10 @@ scoreParam <- BiDAG::scoreparameters("bge", BiDAG::Boston[1:250,1:n])
 samplefit<-sampleBN(scoreParam, "orderIter")
 edgesposterior<-edgep(samplefit, pdag=FALSE, burnin=0.2)
 
-edgesposterior <-  matrix(c(0,0.003747,0.37539,0.536539,
-                      0.0006246,0, 0.179262,0.004372,
-                      0.624609,0.820737,0,0.06121,
-                      0.131792,0.003123,0.019987,0), nrow = 4, ncol = 4, byrow = TRUE)
+# edgesposterior <-  matrix(c(0,0.003747,0.37539,0.536539,
+#                       0.0006246,0, 0.179262,0.004372,
+#                       0.624609,0.820737,0,0.06121,
+#                       0.131792,0.003123,0.019987,0), nrow = 4, ncol = 4, byrow = TRUE)
 
 #          crim          zn      indus        chas
 # crim  0.0000000000 0.003747658 0.37539038 0.536539663
@@ -119,24 +120,18 @@ starttime_model<-proc.time()
 
 switch(as.character(MCMCtype),
        "3"={ # # order MCMC
-         num_iterations <- 3000 
-         set.seed(100) 
-         results_seed123 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
+         num_iterations <- 1000
+         set.seed(100)
+         results_seed123 <- SNOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100,
                                                     # order = list(c(4,2,1,3)),
-                                                    order_stepsize = 100, moveprobs = moveprobs,
+                                                    order_stepsize = 10, moveprobs = moveprobs,
                                                     edgesposterior = edgesposterior )
-         num_iterations <- 3000
-         set.seed(100) 
-         results_seed300 <- BetaOrderSampler_gibbs_ver2(n = n, iteration = num_iterations, order_iter = 100, 
+         num_iterations <- 1000
+         set.seed(123)
+         results_seed300 <- SNOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100,
                                                     # order = list(c(4,2,1,3)),
-                                                    order_stepsize = 10, moveprobs = moveprobs, 
+                                                    order_stepsize = 10, moveprobs = moveprobs,
                                                     edgesposterior = edgesposterior )
-         num_iterations <- 3000
-         set.seed(100) 
-         results_seed500 <- BetaOrderSampler_gibbs_ver3(n = n, iteration = num_iterations, order_iter = 100, 
-                                             # order = list(c(4,2,1,3)),
-                                             order_stepsize = 100, moveprobs = moveprobs, 
-                                             edgesposterior = edgesposterior )
          # num_iterations <- 10000
          # set.seed(100) 
          # results_seed1000 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
@@ -183,34 +178,34 @@ print(endtime_model)
 #   xlab = "Iteration", ylab = "Difference")
 # 
 # 
-# plot(NULL, xlim = c(1, length(results_seed123$diffBiDAGs)), ylim = c(0, 1),  # Adjust ylim based on actual range of your data if needed
-#      xlab = 'Iteration', ylab = 'Edge Probability', 
-#      main = 'Edge Probability Over Iterations')
+plot(NULL, xlim = c(1, length(results_seed300$diffBiDAGs)), ylim = c(0, 1),  # Adjust ylim based on actual range of your data if needed
+     xlab = 'Iteration', ylab = 'Edge Probability',
+     main = 'Edge Probability Over Iterations')
 # 
-# # Generate enough colors for all edges, considering a fully connected directed graph without self-loops
-# colors <- rainbow(n * (n - 1))
-# legend_labels <- vector("character", length = n * (n - 1))
-# color_index <- 1
-# 
-# # Plotting each edge over time, skipping diagonals
-# for (row in 1:n) {
-#   for (col in 1:n) {
-#     if (row != col) {  # Skip diagonals
-#       lines(seq(1, length(results_seed123$diffBiDAGs), by = 1), 
-#             results_seed123$edge_prob[row, col, seq(1, length(results_seed123$diffBiDAGs), by = 1)], 
-#             col = colors[color_index], type = 'l')
-#       legend_labels[color_index] <- paste('Edge', row, '->', col)
-#       color_index <- color_index + 1
-#     }
-#   }
-# }
-# 
-# # Adding legend
-# # Note: Displaying a legend for a large number of edges might not be practical
-# # Consider using a subset or interactive plotting for detailed inspection
-# if (color_index <= 200) {  # Arbitrary threshold to avoid clutter
-#   legend("topright", legend = legend_labels, col = colors, lty = 1, cex = 0.5)
-# }
+# Generate enough colors for all edges, considering a fully connected directed graph without self-loops
+colors <- rainbow(n * (n - 1))
+legend_labels <- vector("character", length = n * (n - 1))
+color_index <- 1
+
+# Plotting each edge over time, skipping diagonals
+for (row in 1:n) {
+  for (col in 1:n) {
+    if (row != col) {  # Skip diagonals
+      lines(seq(1, length(results_seed123$diffBiDAGs), by = 1),
+            results_seed123$edge_prob[row, col, seq(1, length(results_seed123$diffBiDAGs), by = 1)],
+            col = colors[color_index], type = 'l')
+      legend_labels[color_index] <- paste('Edge', row, '->', col)
+      color_index <- color_index + 1
+    }
+  }
+}
+
+# Adding legend
+# Note: Displaying a legend for a large number of edges might not be practical
+# Consider using a subset or interactive plotting for detailed inspection
+if (color_index <= 200) {  # Arbitrary threshold to avoid clutter
+  legend("topright", legend = legend_labels, col = colors, lty = 1, cex = 0.5)
+}
 
 
 starting_mat <- matrix(1, nrow = n, ncol = n)
@@ -229,23 +224,28 @@ plotpedges(orderfitBoston123, cutoff = 0, pdag=FALSE)
 pedges <-  list()
 pedges[[1]] <-  edgep(orderfitBoston100, pdag=FALSE)
 pedges[[2]] <- edgep(orderfitBoston123, pdag=FALSE)
-# pdf("0506plot_order_betaOrder_OneDAGs.pdf")
+# pdf("0513plot_order_betaOrder_DAGset.pdf")
 plot_order_Order <- plotpcor(pedges, xlab="run1", ylab="run2",printedges=TRUE, main = paste("Iteration", num_iterations) )
 cat("order_Order: ",plot_order_Order$MSE, plot_order_Order$R2 , "\n")
 
-pedges_comp123 <-  list()
+pedges_comp123 <-  list() 
 pedges_comp123[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
 pedges_comp123[[2]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
 dimnames(pedges_comp123[[2]]) <- dimnames(pedges_comp123[[1]])
-plot_order_betaOrder <- plotpcor(pedges_comp123, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and BetaSampler-5000iter-weigthed")
+plot_order_betaOrder <- plotpcor(pedges_comp123, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC & SN -1 DAG")
 cat("order_betaOrder123: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
-
-pedges_comp300 <-  list()
+plot(results_seed123$edge_prob[3,2,])
+sum(results_seed123$acceptCount)
+# 
+pedges_comp300 <-  list() 
 pedges_comp300[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
 pedges_comp300[[2]] <- results_seed300$edge_prob[,,length(results_seed300$edge_prob[1,1,])]
 dimnames(pedges_comp300[[2]]) <- dimnames(pedges_comp300[[1]])
-plot_order_betaOrder <- plotpcor(pedges_comp300, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and GibbBetaSampler-5000iter")
+plot_order_betaOrder <- plotpcor(pedges_comp300, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC & SN-1 DAG-Estimated")
 cat("order_betaOrder300: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
+plot(results_seed300$edge_prob[3,2,])
+results_seed300$betas[[length(results_seed300$betas)]]
+sum(results_seed300$acceptCount)
 
 pedges_comp500 <-  list()
 pedges_comp500[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
@@ -253,6 +253,8 @@ pedges_comp500[[2]] <- results_seed500$edge_prob[,,length(results_seed500$edge_p
 dimnames(pedges_comp500[[2]]) <- dimnames(pedges_comp500[[1]])
 plot_order_betaOrder <- plotpcor(pedges_comp500, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and GibbBetaSampler-5000iter-ver3")
 cat("order_betaOrder500: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
+
+plot(results_seed500$edge_prob[3,2,])
 
 # pedges_comp1000 <-  list()
 # pedges_comp1000[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
@@ -264,9 +266,9 @@ cat("order_betaOrder500: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "
 pedges_seed <-  list()
 pedges_seed[[1]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
 pedges_seed[[2]] <- results_seed300$edge_prob[,,length(results_seed300$edge_prob[1,1,])]
-dimnames(pedges_seed[[1]]) <- dimnames(pedges_comp[[1]])
-dimnames(pedges_seed[[2]]) <- dimnames(pedges_comp[[1]])
-plot_order_betaOrder_seed <- plotpcor(pedges_seed, xlab="run1", ylab="run2",printedges=TRUE, main = "Comparison betw. BetaSamplers")
+dimnames(pedges_seed[[1]]) <- dimnames(pedges[[1]])
+dimnames(pedges_seed[[2]]) <- dimnames(pedges[[1]])
+plot_order_betaOrder_seed <- plotpcor(pedges_seed, xlab="run1", ylab="run2",printedges=TRUE, main = "SN under diff. Seeds")
 cat("order_betaOrder_seed: ",plot_order_betaOrder_seed$MSE, plot_order_betaOrder_seed$R2 , "\n")
 
 dev.off()

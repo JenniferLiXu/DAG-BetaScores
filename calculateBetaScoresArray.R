@@ -185,6 +185,7 @@ calculateBetaScoresArray_hash <- function(sampledDAGs, k, n, base_score){
       # cat("DAG_parentset:",calculation_column_beta$DAG_parentset, "childNode", childNode ,",parentNodes",parentNodes, "\n")
       incidence_score <- incidence_score + calculation_column_beta$DAG_parentset
       allBetaScores[ , childNode, dagIndex] <- array(column_beta, dim = c(length(column_beta), 1, 1))
+      # print(allBetaScores[ , childNode, dagIndex])
     }
     incidence_scores[dagIndex] <- incidence_score
   }
@@ -198,12 +199,15 @@ importance_DAG <- function(DAGs, score_under_betas, target_scores){
     differ_score[i] <- target_scores[i] - score_under_betas[[i]]
   }
   # To avoid numerical issues, subtract the max score before exponentiating
+  # print(differ_score)
   max_score <- max(differ_score)
-  importance_weights <- exp(differ_score - max_score)
+  adjusted_scores <- differ_score - max_score
+  importance_weights <- exp(adjusted_scores)
 
   # Normalize the exponentiated scores to get the importance weights
   normalised_weights <- importance_weights / sum(importance_weights)
-  ess_value <- 1 / sum(importance_weights^2)
+  
+  ess_value <- (1 / sum(normalised_weights^2))/length(DAGs)
   
   compress_dag <- Reduce("+", lapply(1:length(normalised_weights), 
                                      function(k) DAGs[[k]] * normalised_weights[k]))
@@ -222,7 +226,7 @@ DAGs_from_order <- function(order_list, nr_sample, beta_matrix){
     # Append these DAGs to the main list
     all_DAGs <- c(all_DAGs, DAGs_for_order)
     all_DAGs_logscore <- c(all_DAGs_logscore,logscores_DAGs)
-    order_of_DAGs <- order_of_DAGs <- c(order_of_DAGs, rep(list(order), nr_sample))
+    order_of_DAGs <- c(order_of_DAGs, rep(list(order), nr_sample))
   }
   
   return(list(incidence = all_DAGs, logscore = all_DAGs_logscore, order = order_of_DAGs))
