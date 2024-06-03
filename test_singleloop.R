@@ -26,12 +26,13 @@ source('./orderandpartition_beta/partitionmoves_betas.R')
 source('./orderandpartition_beta/samplefns-beta.R')
 source('./orderandpartition_beta/samplefns_party-beta.R')
 
-source('./calculateBetaScoresArray.R')
+source('./calculateSN_ScoresArray.R')
 source('./compareDAG_skeleton.R')
 source('./BetaOrderSampler.R') #our method
 source('./BetaOrderSampler_OneDAG.R') 
 source('./BetaOrderSampler_gibbs.R') 
 source('./SNOrderSampler_OneDAG.R') 
+source('./hash-table.R')
 
 
 # Example: Generating a random dataset
@@ -120,33 +121,35 @@ starttime_model<-proc.time()
 
 switch(as.character(MCMCtype),
        "3"={ # # order MCMC
+         num_iterations <- 8000
+         set.seed(100)
+         results_seed123 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100,
+                                                    # order = list(c(4,2,1,3)),
+                                                    order_stepsize = 100, moveprobs = moveprobs,
+                                                    edgesposterior = edgesposterior )
+         
+         num_iterations <- 10000
+         set.seed(123)
+         results_seed300 <- aux_OneDAG(n = n, iteration = num_iterations, order_iter = 100,
+                                                    # order = list(c(4,2,1,3)),
+                                                    order_stepsize = 100, moveprobs = moveprobs,
+                                                    edgesposterior = edgesposterior )
          num_iterations <- 1000
          set.seed(100)
-         results_seed123 <- SNOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100,
-                                                    # order = list(c(4,2,1,3)),
-                                                    order_stepsize = 10, moveprobs = moveprobs,
-                                                    edgesposterior = edgesposterior )
-         num_iterations <- 1000
-         set.seed(123)
-         results_seed300 <- SNOrderSampler_OneDAG(n = n, iteration = num_iterations, order_iter = 100,
-                                                    # order = list(c(4,2,1,3)),
-                                                    order_stepsize = 10, moveprobs = moveprobs,
-                                                    edgesposterior = edgesposterior )
-         # num_iterations <- 10000
-         # set.seed(100) 
-         # results_seed1000 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100, 
-         #                                     # order = list(c(4,2,1,3)),
-         #                                     order_stepsize = 100, moveprobs = moveprobs, 
-         #                                     edgesposterior = edgesposterior )
+         results_seed1000 <- BetaOrderSampler(n = n, iteration = num_iterations, order_iter = 100,
+                                             # order = list(c(4,2,1,3)),
+                                             order_stepsize = 100, moveprobs = moveprobs,
+                                             edgesposterior = edgesposterior )
        },
        "4"={ # partition MCMC
+         num_iterations <- 10000
          set.seed(123) 
-         results_seed123 <- BetaPartitionSampler(n = n, iter = num_iterations, party_iter = 100, 
-                                         party_stepsize = 100, moveprobs = moveprobs, 
+         results_seed300 <- BetaPartitionSampler(n = n, iter = num_iterations, party_iter = 100, 
+                                         party_stepsize = 1, moveprobs = moveprobs, 
                                          edgesposterior = edgesposterior )
          set.seed(100)
          results_seed100<- BetaPartitionSampler(n = n, iter = num_iterations, party_iter = 100, 
-                                 party_stepsize = 100, moveprobs = moveprobs, 
+                                 party_stepsize = 1, moveprobs = moveprobs, 
                                  edgesposterior = edgesposterior )
        }
        )
@@ -157,17 +160,6 @@ print(endtime_model)
 
 # sum(results_seed123$acceptCount)/num_iterations
 # sum(results_seed100$acceptCount)/num_iterations
-# num_iterations <- 1e4 
-# user   system  elapsed 
-# 1307.209    5.505 1319.328 (calculateBetaScoresArray)
-# 767.520   8.882 786.310    (calculateBetaScoresArray_hash)
-
-# num_iterations <- 1e3 
-# user  system elapsed 
-#  143.562   0.833 147.043 (calculateBetaScoresArray)
-#  72.534   0.695  72.791 (calculateBetaScoresArray_hash)
-#  33.980   0.408  35.066  (calculateBetaScoresArray_hash new version)
-
 
 # ########## Plotting the differences between our matrix and the one from BiDAG
 # plot(#differences[-c(1:3)],  
@@ -178,7 +170,8 @@ print(endtime_model)
 #   xlab = "Iteration", ylab = "Difference")
 # 
 # 
-plot(NULL, xlim = c(1, length(results_seed300$diffBiDAGs)), ylim = c(0, 1),  # Adjust ylim based on actual range of your data if needed
+graph_now <- results_seed300
+plot(NULL, xlim = c(1, length(graph_now$acceptCount)), ylim = c(0, 1),  # Adjust ylim based on actual range of your data if needed
      xlab = 'Iteration', ylab = 'Edge Probability',
      main = 'Edge Probability Over Iterations')
 # 
@@ -186,13 +179,13 @@ plot(NULL, xlim = c(1, length(results_seed300$diffBiDAGs)), ylim = c(0, 1),  # A
 colors <- rainbow(n * (n - 1))
 legend_labels <- vector("character", length = n * (n - 1))
 color_index <- 1
-
+   
 # Plotting each edge over time, skipping diagonals
 for (row in 1:n) {
   for (col in 1:n) {
     if (row != col) {  # Skip diagonals
-      lines(seq(1, length(results_seed123$diffBiDAGs), by = 1),
-            results_seed123$edge_prob[row, col, seq(1, length(results_seed123$diffBiDAGs), by = 1)],
+      lines(seq(1, length(graph_now$acceptCount), by = 1),
+            graph_now$edge_prob[row, col, seq(1, length(graph_now$acceptCount), by = 1)],
             col = colors[color_index], type = 'l')
       legend_labels[color_index] <- paste('Edge', row, '->', col)
       color_index <- color_index + 1
@@ -232,16 +225,16 @@ pedges_comp123 <-  list()
 pedges_comp123[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
 pedges_comp123[[2]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
 dimnames(pedges_comp123[[2]]) <- dimnames(pedges_comp123[[1]])
-plot_order_betaOrder <- plotpcor(pedges_comp123, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC & SN -1 DAG")
+plot_order_betaOrder <- plotpcor(pedges_comp123, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC & Estimated-1DAG")
 cat("order_betaOrder123: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
 plot(results_seed123$edge_prob[3,2,])
 sum(results_seed123$acceptCount)
 # 
-pedges_comp300 <-  list() 
+pedges_comp300 <-  list()  
 pedges_comp300[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
 pedges_comp300[[2]] <- results_seed300$edge_prob[,,length(results_seed300$edge_prob[1,1,])]
 dimnames(pedges_comp300[[2]]) <- dimnames(pedges_comp300[[1]])
-plot_order_betaOrder <- plotpcor(pedges_comp300, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC & SN-1 DAG-Estimated")
+plot_order_betaOrder <- plotpcor(pedges_comp300, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC & PartitionSN-1DAG")
 cat("order_betaOrder300: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
 plot(results_seed300$edge_prob[3,2,])
 results_seed300$betas[[length(results_seed300$betas)]]
@@ -249,26 +242,18 @@ sum(results_seed300$acceptCount)
 
 pedges_comp500 <-  list()
 pedges_comp500[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
-pedges_comp500[[2]] <- results_seed500$edge_prob[,,length(results_seed500$edge_prob[1,1,])]
+pedges_comp500[[2]] <- results_seed100$edge_prob[,,length(results_seed100$edge_prob[1,1,])]
 dimnames(pedges_comp500[[2]]) <- dimnames(pedges_comp500[[1]])
 plot_order_betaOrder <- plotpcor(pedges_comp500, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and GibbBetaSampler-5000iter-ver3")
 cat("order_betaOrder500: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
-
 plot(results_seed500$edge_prob[3,2,])
 
-# pedges_comp1000 <-  list()
-# pedges_comp1000[[1]] <- edgep(orderfitBoston100, pdag=FALSE)
-# pedges_comp1000[[2]] <- results_seed1000$edge_prob[,,length(results_seed1000$edge_prob[1,1,])]
-# dimnames(pedges_comp1000[[2]]) <- dimnames(pedges_comp1000[[1]])
-# plot_order_betaOrder <- plotpcor(pedges_comp1000, xlab="run1", ylab="run2",printedges=TRUE, main = "OrderMCMC and BetaSampler-1e4iter")
-# cat("order_betaOrder1000: ",plot_order_betaOrder$MSE, plot_order_betaOrder$R2 , "\n")
-
 pedges_seed <-  list()
-pedges_seed[[1]] <- results_seed123$edge_prob[,,length(results_seed123$edge_prob[1,1,])]
+pedges_seed[[1]] <- results_seed100$edge_prob[,,length(results_seed100$edge_prob[1,1,])]
 pedges_seed[[2]] <- results_seed300$edge_prob[,,length(results_seed300$edge_prob[1,1,])]
 dimnames(pedges_seed[[1]]) <- dimnames(pedges[[1]])
 dimnames(pedges_seed[[2]]) <- dimnames(pedges[[1]])
-plot_order_betaOrder_seed <- plotpcor(pedges_seed, xlab="run1", ylab="run2",printedges=TRUE, main = "SN under diff. Seeds")
+plot_order_betaOrder_seed <- plotpcor(pedges_seed, xlab="run1", ylab="run2",printedges=TRUE, main = "Partition-SN under diff. Seeds")
 cat("order_betaOrder_seed: ",plot_order_betaOrder_seed$MSE, plot_order_betaOrder_seed$R2 , "\n")
 
 dev.off()

@@ -19,7 +19,7 @@
 BetaOrderSampler <- function(n, iteration, order_iter, order = NULL, 
                              order_stepsize, moveprobs, base_score = 0, 
                              starting_dag = NULL, betas_init = NULL, skeleton = FALSE,
-                             edgesposterior, burnin = 0.4) {
+                             edgesposterior, burnin = 0.2) {
   
   elements <- c(1:n) # Define set of elements
   permutations <- permn(elements) # Generate all permutations
@@ -35,7 +35,7 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
   }
   # Initialize beta matrix
   if (is.null(betas_init)) {
-    calcultion_betas_init <- calculateBetaScoresArray_hash(starting_dag, k = 1, n, base_score = 0)
+    calcultion_betas_init <- calculateSN_ScoresArray_hash(starting_dag, k = 1, n, base_score = 0)
     betas_init <- calcultion_betas_init$allBetaScores[,,1]
     base_score <- 0
     # Idea: subtract the highest order score
@@ -61,13 +61,15 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
   init_sampled_DAGs <- lapply(1:nr_sample, function(x) samplescore(n, betas_init, order[[1]]))
   DAG_prev <- lapply(init_sampled_DAGs, function(dag) dag$incidence) 
   # incidence_logscore<-lapply(init_sampled_DAGs, function(dag) dag$logscore) 
-  BiDAGscore_prev_list <- calculateBetaScoresArray_hash(DAG_prev, k = length(DAG_prev), n, base_score)$target_DAG_score
+  BiDAGscore_prev_list <- calculateSN_ScoresArray_hash(DAG_prev, k = length(DAG_prev), n, base_score)$target_DAG_score
   is_weights <- list(rep(1/nr_sample, nr_sample))
-
+  unnorm_weights <- list(rep(1/nr_sample, nr_sample))
+  weighted_current_BiDAG <- sum(unlist(lapply(1:length(nr_sample), function(k) BiDAGscore_prev_list[[k]]*is_weights[[1]][k])))
+  
   # Looping through iterations
   for (i in 1:iter) {
     ess <- 0
-    ess_threshold <- 0.5
+    ess_threshold <- 0.1
     while (ess < ess_threshold) {
       beta_prev <- weighted_betas[[i]]
       order_prev <- order[[i]]
@@ -85,7 +87,7 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
       incidence_logscore<-lapply(sampled_DAGs, function(dag) dag$logscore) # scores of new DAGs under old beta
       
       # Update beta matrix using the weights from sampled DAGs
-      calculation_beta_values <- calculateBetaScoresArray_hash(incidence_matrices, k = length(incidence_matrices) ,n, base_score = base_score)
+      calculation_beta_values <- calculateSN_ScoresArray_hash(incidence_matrices, k = length(incidence_matrices) ,n, base_score = base_score)
       BiDAGscore_propose <- calculation_beta_values$target_DAG_score
       beta_values <- calculation_beta_values$allBetaScores
       
@@ -98,12 +100,11 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
       # }
     }
     weights_proposed <- is_results$importance_weights # normalised weights under old beta
+    unnorm_weights_proposed <- is_results$unnorm_weights
     
     #New beta matrix using the normalised weights
-    # weighted_betas_proposed <- Reduce("+", lapply(1:length(weights_proposed),
-    #                                               function(k) beta_values[,,k] * weights_proposed[k]))
-    weighted_betas_proposed <- Reduce("+", lapply(1:length(weights_proposed), function(k) beta_values[,,k] /nr_sample))
-
+    weighted_betas_proposed <- Reduce("+", lapply(1:length(weights_proposed),
+                                                  function(k) beta_values[,,k] * weights_proposed[k]))
     proposed_logscore_list <- sapply(1:length(permutations), 
                                      function(k) sum(orderscore_betas(n, c(1:n), weighted_betas_proposed, permutations[[k]])))
     proposed_totalscore_orders <- calculate_final_score(proposed_logscore_list, operation = "sum")
@@ -117,28 +118,37 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
     is_results_prev <- importance_DAG(DAGs = DAG_prev, score_under_betas = oDAGnBeta_logscore_list, target_scores = BiDAGscore_prev_list)
     prev_weight <-is_results_prev$importance_weights
     
-    modify_weight <- unlist(lapply(1:length(weights_proposed), function(k) is_weights[[i]][k]/weights_proposed[k]))
-    normolized_modify_weight <- modify_weight/sum(modify_weight)
+    # modify_weight <- unlist(lapply(1:length(unnorm_weights_proposed), function(k) unnorm_weights[[i]][k]/unnorm_weights_proposed[k]))
+    # normolized_modify_weight <- modify_weight/sum(modify_weight)
     # modify_incidence_logscore <- lapply(1:length(normolized_modify_weight), function(k) incidence_logscore[[k]]*normolized_modify_weight[k]) 
     # modify_incidence_logscore <- lapply(1:length(modify_weight), function(k) incidence_logscore[[k]]*normolized_modify_weight[k]) 
     # modify_res<- importance_DAG(DAGs = incidence_matrices, score_under_betas = incidence_logscore, target_scores = BiDAGscore_propose)
-    modify_log_diff <- unlist(lapply(1:length(normolized_modify_weight), function(k) is_results$log_diff[k]*prev_weight[k]))
+    modify_log_diff <- unlist(lapply(1:length(nr_sample), function(k) is_results$log_diff[k]/nr_sample))
     # log_diff <- unlist(lapply(1:length(is_weights[[i]]), function(k) (oDAGnBeta_logscore_list - BiDAGscore_prev_list)[k]*is_weights[[i]][k]))
-    modify_log_diff_prev <- unlist(lapply(1:length(prev_weight), function(k) is_results_prev$log_diff[k]*weights_proposed[k]))
+    # modify_log_diff_prev <- unlist(lapply(1:length(prev_weight), function(k) is_results_prev$log_diff[k]*is_weights[[i]][k]))
     
+    mean_BiDAG_prev <- calculate_final_score_mean(unlist(BiDAGscore_prev_list))
+    modify_weight <- unlist(lapply(1:length(unnorm_weights_proposed), function(k) unnorm_weights[[i]][k]/is_results_prev$unnorm_weights[k]))
+    normolized_modify_weight <- modify_weight/sum(modify_weight)
+    modified_oDAG_score <- unlist(lapply(1:length(normolized_modify_weight), function(k) oDAGnBeta_logscore_list[[k]]*normolized_modify_weight[k]))
+    
+    
+    weighted_prop_BiDAG <- sum(unlist(lapply(1:length(nr_sample), function(k) BiDAGscore_propose[[k]]*weights_proposed[k])))
+    BiDAG_ratio <- weighted_prop_BiDAG - weighted_current_BiDAG
+    
+    weighted_oDnB <- sum(unlist(lapply(1:length(nr_sample), function(k) oDAGnBeta_logscore_list[[k]]*is_weights[[i]][k])))
+    weighted_nDoB <- sum(unlist(lapply(1:length(nr_sample), function(k) incidence_logscore[[k]]*weights_proposed[k])))
+    SN_score_ratio <- weighted_oDnB - weighted_nDoB
     # Acceptance ratio
-    # Test
-    # wB <- calculate_final_score(modify_log_diff, operation = "sum")
-    # inv_wA <- calculate_final_score(oDAGnBeta_logscore_list - BiDAGscore_prev_list, operation = "mean")
 
     wB <- sum(modify_log_diff)
-    inv_wA <- sum(modify_log_diff_prev)
+    inv_wA <- sum(modified_oDAG_score) - mean_BiDAG_prev
     # inv_wA <- sum(unlist(lapply(1:length(weights_proposed), function(k) unlist(oDAGnBeta_logscore_list - BiDAGscore_prev_list)[k]*weights_proposed[k])))
     
     # print(inv_wA)
     # print(sum( unlist(lapply(1:length(weights_proposed), function(k) (oDAGnBeta_logscore_list - BiDAGscore_prev_list)[[k]]*weights_proposed[k]))))
-    cat("wB +  inv_wA",wB +  inv_wA, "\n")
-    log_ratio <- wB +  inv_wA + totalscore_orders_prev - proposed_totalscore_orders
+    # cat("wB +  inv_wA",wB +  inv_wA, "\n")
+    log_ratio <- BiDAG_ratio +  SN_score_ratio + totalscore_orders_prev - proposed_totalscore_orders
     ratio <- exp(log_ratio)
     
     # Metropolis-Hastings acceptance step
@@ -146,7 +156,9 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
       compress_DAG[[i+1]] <- is_results$compress_dag
       # compress_DAG[[i+1]] <- Reduce("+", lapply(1:length(incidence_matrices), function(k) incidence_matrices[[k]] /nr_sample))
       weighted_betas[[i+1]] <- weighted_betas_proposed
-      is_weights [[i+1]] <- weights_proposed
+      is_weights[[i+1]] <- weights_proposed
+      unnorm_weights[[i+1]] <- unnorm_weights_proposed
+      weighted_prop_BiDAG <- weighted_current_BiDAG
       order[[i+1]] <- permy
       count_accept[i] <- 1 # Accept 
       BiDAGscore_prev_list <- BiDAGscore_propose
@@ -159,6 +171,7 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
       compress_DAG[[i+1]] <- compress_DAG[[i]]
       weighted_betas[[i+1]] <- weighted_betas[[i]]
       is_weights [[i+1]] <- is_weights [[i]]
+      unnorm_weights[[i+1]] <- unnorm_weights[[i]]
       order[[i+1]] <- order[[i]]
       count_accept[i] <- 0 # Reject
     }
@@ -187,7 +200,6 @@ BetaOrderSampler <- function(n, iteration, order_iter, order = NULL,
               acceptCount = count_accept[-c(1:burin_iter)], 
               betas = weighted_betas[-c(1:burin_iter)],
               diffBiDAGs = diff_BiDAGs[-c(1:burin_iter)]
-              # ,totalscore_of_DAGs = totalscore_of_DAGs[-c(1:burin_iter)]
               )
          )
 }
